@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dimensionador de Canchas — Torneo Americano de Pádel</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14; --surface: #161a23; --border: #2a2f3e;
+    --accent: #00e5a0; --accent2: #ff6b35; --text: #e8eaf0;
+    --muted: #6b7280; --danger: #ff4d6d; --warn: #ffd166;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; min-height: 100vh; }
+
+  header { background: linear-gradient(135deg, #0d0f14, #161a23); border-bottom: 1px solid var(--border); padding: 18px 28px; display: flex; align-items: center; gap: 14px; position: sticky; top: 0; z-index: 100; }
+  .logo-icon { width: 38px; height: 38px; background: var(--accent); border-radius: 10px; display: grid; place-items: center; font-size: 18px; flex-shrink: 0; }
+  header h1 { font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 2px; }
+  header h1 span { color: var(--accent); }
+  .header-sub { font-size: 11px; color: var(--muted); margin-left: auto; text-align: right; line-height: 1.5; }
+
+  .container { display: grid; grid-template-columns: 400px 1fr; min-height: calc(100vh - 66px); }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 20px; overflow-y: auto; max-height: calc(100vh - 66px); position: sticky; top: 66px; }
+  .main { padding: 20px; }
+
+  .section { margin-bottom: 20px; }
+  .section-title { font-family: 'Bebas Neue', sans-serif; font-size: 14px; letter-spacing: 2px; color: var(--accent); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .field { margin-bottom: 9px; }
+  label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+  input[type="number"], input[type="time"] { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 11px; border-radius: 7px; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; transition: border-color 0.2s; }
+  input:focus { border-color: var(--accent); }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border: 1px solid var(--border); padding: 9px 12px; border-radius: 7px; margin-bottom: 7px; cursor: pointer; transition: border-color 0.2s; }
+  .toggle-row:hover { border-color: var(--accent); }
+  .toggle-row span { font-size: 13px; }
+  .toggle { width: 34px; height: 18px; background: var(--border); border-radius: 9px; position: relative; transition: background 0.2s; flex-shrink: 0; }
+  .toggle.on { background: var(--accent); }
+  .toggle::after { content: ''; position: absolute; width: 12px; height: 12px; background: white; border-radius: 50%; top: 3px; left: 3px; transition: transform 0.2s; }
+  .toggle.on::after { transform: translateX(16px); }
+
+  .cat-list { display: flex; flex-direction: column; gap: 7px; }
+  .cat-item { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+  .cat-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .cat-color { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .cat-remove { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 4px; transition: color 0.2s; }
+  .cat-remove:hover { color: var(--danger); }
+
+  .add-cat-btn { width: 100%; background: transparent; border: 1px dashed var(--border); color: var(--muted); padding: 9px; border-radius: 7px; cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 13px; transition: all 0.2s; margin-top: 7px; }
+  .add-cat-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .calc-btn { width: 100%; background: var(--accent); color: #000; border: none; padding: 13px; border-radius: 9px; font-family: 'Bebas Neue', sans-serif; font-size: 17px; letter-spacing: 2px; cursor: pointer; margin-top: 6px; transition: transform 0.15s, opacity 0.15s; }
+  .calc-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+  .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 9px; margin-bottom: 18px; }
+  .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px; text-align: center; }
+  .kpi-card.hi { border-color: var(--accent); background: linear-gradient(135deg, rgba(0,229,160,0.09), var(--surface)); }
+  .kpi-card.wn { border-color: var(--warn); background: linear-gradient(135deg, rgba(255,209,102,0.07), var(--surface)); }
+  .kpi-val { font-family: 'Bebas Neue', sans-serif; font-size: 36px; line-height: 1; color: var(--accent); margin-bottom: 3px; }
+  .kpi-card.wn .kpi-val { color: var(--warn); }
+  .kpi-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+
+  .cat-breakdown { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+  .cb-item { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; }
+  .cb-header { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+  .cb-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .cb-name { font-weight: 600; font-size: 13px; flex: 1; }
+  .cb-courts { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--accent); }
+  .cb-courts small { font-size: 11px; color: var(--muted); font-family: 'DM Sans', sans-serif; font-weight: 400; }
+  .cb-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 5px; }
+  .cb-stat { background: var(--bg); border-radius: 5px; padding: 6px; text-align: center; }
+  .cb-stat-val { font-weight: 600; font-size: 14px; }
+  .cb-stat-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; margin-top: 1px; }
+
+  .tl-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 16px; overflow-x: auto; }
+  .tl-day-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,229,160,0.1); border: 1px solid rgba(0,229,160,0.3); border-radius: 6px; padding: 4px 10px; font-size: 12px; color: var(--accent); font-weight: 600; margin-bottom: 11px; }
+
+  .warnings { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .warn-item { display: flex; align-items: flex-start; gap: 8px; border-radius: 7px; padding: 8px 12px; font-size: 12px; }
+  .warn-item.danger { background: rgba(255,77,109,0.08); border: 1px solid rgba(255,77,109,0.25); }
+  .warn-item.info { background: rgba(255,209,102,0.06); border: 1px solid rgba(255,209,102,0.25); }
+
+  [data-tip] { position: relative; cursor: help; }
+  [data-tip]::after { content: attr(data-tip); position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); background: #1e2330; color: #fff; padding: 5px 8px; border-radius: 5px; font-size: 11px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 999; border: 1px solid var(--border); }
+  [data-tip]:hover::after { opacity: 1; }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  @media (max-width: 800px) {
+    .container { grid-template-columns: 1fr; }
+    .sidebar { position: static; max-height: none; }
+    .header-sub { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-icon">🎾</div>
+  <div><h1>TORNEO AMERICANO <span>PÁDEL</span></h1></div>
+  <div class="header-sub">Dimensionador de canchas<br>& planificación operativa</div>
+</header>
+
+<div class="container">
+<aside class="sidebar">
+
+  <div class="section">
+    <div class="section-title">Categorías</div>
+    <div class="cat-list" id="catList"></div>
+    <button class="add-cat-btn" onclick="addCategory()">＋ Agregar categoría</button>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Formato</div>
+    <div class="toggle-row" onclick="toggleOpt('hasFaseGrupos')">
+      <span data-tip="Todas las parejas del grupo se enfrentan entre sí">Fase de grupos (Round Robin)</span>
+      <div class="toggle on" id="tog_hasFaseGrupos"></div>
+    </div>
+    <div id="gruposOptions">
+      <div class="g2" style="margin-bottom:8px">
+        <div class="field"><label>Parejas por grupo</label><input type="number" id="pairsPerGroup" value="4" min="3" max="8" onchange="recalcAll()"></div>
+        <div class="field"><label>Avanzan por grupo</label><input type="number" id="advancePerGroup" value="2" min="1" max="4" onchange="recalcAll()"></div>
+      </div>
+    </div>
+    <div class="toggle-row" onclick="toggleOpt('hasFaseFinal')">
+      <span data-tip="Cuadro eliminatorio tras fase de grupos">Fase final (playoffs)</span>
+      <div class="toggle on" id="tog_hasFaseFinal"></div>
+    </div>
+    <div class="toggle-row" onclick="toggleOpt('allowBye')">
+      <span data-tip="Pareja sin rival en una ronda (nº impar de parejas)">Permitir pareja libre (bye)</span>
+      <div class="toggle on" id="tog_allowBye"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Tiempos</div>
+    <div class="g2">
+      <div class="field"><label>Duración partido (min)</label><input type="number" id="matchDuration" value="45" min="15" max="120" onchange="recalcAll()"></div>
+      <div class="field"><label>Pausa entre partidos (min)</label><input type="number" id="pauseDuration" value="10" min="0" max="60" onchange="recalcAll()"></div>
+    </div>
+    <div class="g2">
+      <div class="field"><label>Hora inicio (cada día)</label><input type="time" id="startTime" value="09:00" onchange="recalcAll()"></div>
+      <div class="field"><label data-tip="Horas jugables por jornada">Horas disp. por día</label><input type="number" id="hoursPerDay" value="8" min="1" max="16" step="0.5" onchange="recalcAll()"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Jornadas y canchas</div>
+    <div class="g2">
+      <div class="field"><label data-tip="¿En cuántos días se disputa el torneo?">Días del torneo</label><input type="number" id="numDays" value="1" min="1" max="7" onchange="recalcAll()"></div>
+      <div class="field"><label data-tip="0 = automático según mínimo necesario">Canchas máx. disponibles</label><input type="number" id="maxCourts" value="0" min="0" max="30" onchange="recalcAll()"></div>
+    </div>
+    <div id="dayLogicInfo" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px"></div>
+  </div>
+
+  <button class="calc-btn" onclick="recalcAll()">⚡ CALCULAR</button>
+</aside>
+
+<main class="main" id="mainContent">
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:400px;color:var(--muted);text-align:center;gap:14px">
+    <div style="font-size:48px;opacity:0.25">🏟️</div>
+    <p style="font-size:13px;max-width:240px;line-height:1.6">Configura las categorías y parámetros del torneo para ver el dimensionamiento de canchas.</p>
+  </div>
+</main>
+</div>
+
+<script>
+const CAT_COLORS = ['#00e5a0','#ff6b35','#ffd166','#a78bfa','#60a5fa','#f472b6','#34d399','#fb923c'];
+let categories = [{ id:1, name:'Masculino A', pairs:8 }, { id:2, name:'Femenino B', pairs:6 }];
+let nextId = 3;
+let opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true };
+
+// ── UI HELPERS ──────────────────────────────────────────────────────────────
+function renderCats() {
+  const list = document.getElementById('catList');
+  list.innerHTML = '';
+  categories.forEach((cat, i) => {
+    const color = CAT_COLORS[i % CAT_COLORS.length];
+    const d = document.createElement('div');
+    d.className = 'cat-item';
+    d.innerHTML = `
+      <div class="cat-header">
+        <div class="cat-color" style="background:${color}"></div>
+        <input type="text" value="${cat.name}" style="background:transparent;border:none;color:var(--text);font-weight:600;font-size:13px;outline:none;flex:1;"
+          onchange="updateCat(${cat.id},'name',this.value)">
+        <button class="cat-remove" onclick="removeCategory(${cat.id})">×</button>
+      </div>
+      <div class="g2">
+        <div class="field" style="margin:0"><label style="font-size:10px">Nº de parejas</label>
+          <input type="number" value="${cat.pairs}" min="2" max="64" onchange="updateCat(${cat.id},'pairs',parseInt(this.value))">
+        </div>
+      </div>`;
+    list.appendChild(d);
+  });
+}
+function addCategory() { categories.push({ id: nextId++, name: `Categoría ${nextId-1}`, pairs: 4 }); renderCats(); recalcAll(); }
+function removeCategory(id) { if (categories.length <= 1) return; categories = categories.filter(c => c.id !== id); renderCats(); recalcAll(); }
+function updateCat(id, f, v) { const c = categories.find(c => c.id === id); if (c) { c[f] = v; recalcAll(); } }
+function toggleOpt(key) {
+  opts[key] = !opts[key];
+  document.getElementById('tog_' + key).className = 'toggle' + (opts[key] ? ' on' : '');
+  if (key === 'hasFaseGrupos') document.getElementById('gruposOptions').style.display = opts[key] ? 'block' : 'none';
+  recalcAll();
+}
+
+// ── MATH ────────────────────────────────────────────────────────────────────
+const rr = n => (n * (n - 1)) / 2;
+
+function calcGroupPhase(pairs, ppg) {
+  const groups = Math.ceil(pairs / ppg);
+  const rem = pairs % ppg;
+  const totalMatches = rem === 0 ? groups * rr(ppg) : (groups - 1) * rr(ppg) + rr(rem);
+  return { groups, totalMatches, rounds: ppg - 1 };
+}
+
+function calcFinalPhase(adv) {
+  if (adv <= 1) return { matches: 0, rounds: 0 };
+  let size = 1; while (size < adv) size *= 2;
+  return { matches: size - 1, rounds: Math.log2(size) };
+}
+
+function calcCategory(cat) {
+  const ppg = +document.getElementById('pairsPerGroup').value || 4;
+  const apg = +document.getElementById('advancePerGroup').value || 2;
+  const matchMin = +document.getElementById('matchDuration').value || 45;
+  const pauseMin = +document.getElementById('pauseDuration').value || 10;
+  const slotMin = matchMin + pauseMin;
+
+  let grupMatches = 0, grupRounds = 0, finalMatches = 0, finalRounds = 0, groups = 1, adv = cat.pairs;
+
+  if (opts.hasFaseGrupos) {
+    const gp = calcGroupPhase(cat.pairs, ppg);
+    grupMatches = gp.totalMatches; grupRounds = gp.rounds; groups = gp.groups;
+    adv = groups * apg;
+  }
+  if (opts.hasFaseFinal && adv >= 2) {
+    const fp = calcFinalPhase(adv);
+    finalMatches = fp.matches; finalRounds = fp.rounds;
+  } else if (!opts.hasFaseGrupos) {
+    grupMatches = rr(cat.pairs); grupRounds = cat.pairs - 1; groups = 1;
+  }
+
+  const totalMatches = grupMatches + finalMatches;
+
+  // Courts needed: max simultaneous matches in any round
+  const courtsGroup = opts.hasFaseGrupos ? groups * Math.floor(ppg / 2) : Math.ceil(cat.pairs / 2);
+  const fp2 = (opts.hasFaseFinal && adv >= 2) ? calcFinalPhase(adv) : { matches: 0, rounds: 1 };
+  const courtsFinal = fp2.rounds > 0 ? Math.ceil(fp2.matches / fp2.rounds) : 0;
+  const minCourts = Math.max(courtsGroup, courtsFinal, 1);
+
+  const totalMinutes = Math.ceil(totalMatches / minCourts) * slotMin;
+
+  return { cat, totalMatches, grupMatches, grupRounds, finalMatches, finalRounds, groups, adv, minCourts, totalMinutes, slotMin };
+}
+
+// ── MULTI-DAY DISTRIBUTION ──────────────────────────────────────────────────
+// Logic:
+//   numDays = 1  → everything in 1 day
+//   numDays >= 2, both phases → grupos days 1..N-1, playoffs last day
+//   numDays >= 2, single phase → distribute matches evenly across days
+function distributeDays(r, numDays) {
+  const days = Array.from({ length: numDays }, () => ({ matches: 0, minutes: 0, phase: '' }));
+
+  if (numDays === 1) {
+    days[0] = { matches: r.totalMatches, minutes: r.totalMinutes, phase: 'TODO' };
+    return days;
+  }
+
+  const bothPhases = opts.hasFaseGrupos && opts.hasFaseFinal && r.finalMatches > 0;
+
+  if (bothPhases) {
+    // Grupos en días 1..N-1, playoffs en día N
+    const groupDays = numDays - 1;
+    let remaining = r.grupMatches;
+    for (let d = 0; d < groupDays; d++) {
+      const m = Math.ceil(remaining / (groupDays - d));
+      days[d].matches = m;
+      days[d].minutes = Math.ceil(m / r.minCourts) * r.slotMin;
+      days[d].phase = 'GRUPOS';
+      remaining -= m;
+    }
+    const finalCourts = Math.max(1, Math.ceil(r.minCourts / 2));
+    days[numDays - 1].matches = r.finalMatches;
+    days[numDays - 1].minutes = Math.ceil(r.finalMatches / finalCourts) * r.slotMin;
+    days[numDays - 1].phase = 'PLAYOFFS';
+  } else {
+    // Single phase: distribute evenly
+    const total = r.totalMatches;
+    let remaining = total;
+    const phase = r.grupMatches > 0 ? (opts.hasFaseFinal && r.finalMatches > 0 ? 'TODO' : (opts.hasFaseGrupos ? 'GRUPOS' : 'RR')) : 'PLAYOFFS';
+    for (let d = 0; d < numDays; d++) {
+      const m = Math.ceil(remaining / (numDays - d));
+      days[d].matches = m;
+      days[d].minutes = Math.ceil(m / r.minCourts) * r.slotMin;
+      days[d].phase = phase;
+      remaining -= m;
+    }
+  }
+  return days;
+}
+
+const fmt = (totalMin) => {
+  const h = Math.floor(totalMin / 60) % 24;
+  const m = totalMin % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+};
+const dur = (min) => `${Math.floor(min/60)}h${min%60>0?(min%60)+'m':''}`;
+
+// ── RENDER ───────────────────────────────────────────────────────────────────
+function recalcAll() {
+  const numDays = Math.max(1, +document.getElementById('numDays').value || 1);
+  const maxCourts = +document.getElementById('maxCourts').value || 0;
+  const hoursPerDay = parseFloat(document.getElementById('hoursPerDay').value) || 8;
+  const minsPerDay = hoursPerDay * 60;
+  const startTimeStr = document.getElementById('startTime').value || '09:00';
+  const [sh, sm] = startTimeStr.split(':').map(Number);
+  const startMin = sh * 60 + sm;
+
+  const base = categories.map(calcCategory);
+  const withDays = base.map((r, i) => ({ ...r, color: CAT_COLORS[i % CAT_COLORS.length], days: distributeDays(r, numDays) }));
+
+  // Update info box
+  const infoBox = document.getElementById('dayLogicInfo');
+  if (numDays > 1) {
+    infoBox.style.display = 'block';
+    const bothPhases = opts.hasFaseGrupos && opts.hasFaseFinal;
+    infoBox.innerHTML = bothPhases && numDays >= 2
+      ? `📋 Estrategia: <b>Grupos</b> en días 1–${numDays-1} · <b>Playoffs</b> en día ${numDays}`
+      : `📋 Estrategia: Partidos distribuidos equitativamente entre los ${numDays} días`;
+  } else {
+    infoBox.style.display = 'none';
+  }
+
+  const totalCourtsIdeal = base.reduce((s, r) => s + r.minCourts, 0);
+  const effectiveCourts = maxCourts > 0 ? Math.min(maxCourts, totalCourtsIdeal) : totalCourtsIdeal;
+  const totalMatches = base.reduce((s, r) => s + r.totalMatches, 0);
+
+  // Duration per day across categories
+  const durByDay = Array.from({ length: numDays }, (_, d) =>
+    Math.max(...withDays.map(r => r.days[d]?.minutes || 0))
+  );
+  const maxDayDur = Math.max(...durByDay);
+  const longestDayIdx = durByDay.indexOf(maxDayDur);
+
+  // Warnings
+  const warnings = [];
+  if (!opts.hasFaseGrupos && !opts.hasFaseFinal) warnings.push({ t:'danger', msg:'Activa al menos una fase (grupos o final).' });
+  base.forEach(r => {
+    if (!opts.allowBye && r.cat.pairs % 2 !== 0) warnings.push({ t:'info', msg:`"${r.cat.name}": nº impar de parejas sin bye.` });
+    if (r.cat.pairs < 2) warnings.push({ t:'danger', msg:`"${r.cat.name}": mínimo 2 parejas.` });
+  });
+  if (maxCourts > 0 && totalCourtsIdeal > maxCourts) warnings.push({ t:'info', msg:`Canchas disponibles (${maxCourts}) < ideales (${totalCourtsIdeal}). El torneo tomará más tiempo.` });
+  durByDay.forEach((d, i) => {
+    if (d > minsPerDay) warnings.push({ t:'danger', msg:`Día ${i+1}: requiere ${dur(d)} pero solo hay ${hoursPerDay}h disponibles. Agrega canchas o más días.` });
+  });
+
+  const main = document.getElementById('mainContent');
+  main.innerHTML = `
+    ${warnings.length ? `<div class="warnings">${warnings.map(w =>
+      `<div class="warn-item ${w.t}"><span style="flex-shrink:0">${w.t==='info'?'⚠️':'🚨'}</span><span>${w.msg}</span></div>`).join('')}</div>` : ''}
+
+    <div class="kpi-grid">
+      <div class="kpi-card hi"><div class="kpi-val">${effectiveCourts}</div><div class="kpi-label">Canchas necesarias</div></div>
+      <div class="kpi-card"><div class="kpi-val">${totalMatches}</div><div class="kpi-label">Partidos totales</div></div>
+      <div class="kpi-card"><div class="kpi-val">${numDays}</div><div class="kpi-label">Días de torneo</div></div>
+      <div class="kpi-card ${maxDayDur > minsPerDay ? 'wn' : ''}">
+        <div class="kpi-val" style="font-size:26px">${dur(maxDayDur)}</div>
+        <div class="kpi-label">Jornada más larga (Día ${longestDayIdx+1})</div>
+      </div>
+      <div class="kpi-card"><div class="kpi-val">${categories.length}</div><div class="kpi-label">Categorías</div></div>
+      <div class="kpi-card"><div class="kpi-val">${categories.reduce((s,c)=>s+c.pairs*2,0)}</div><div class="kpi-label">Jugadores</div></div>
+    </div>
+
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:11px;display:flex;align-items:center;gap:8px;">
+      POR CATEGORÍA <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+
+    <div class="cat-breakdown">
+      ${withDays.map(r => {
+        const advTxt = opts.hasFaseFinal && r.adv >= 2 ? `→ ${r.adv} parejas avanzan a playoffs` : '';
+        return `
+        <div class="cb-item" style="border-left:3px solid ${r.color}">
+          <div class="cb-header">
+            <div class="cb-dot" style="background:${r.color}"></div>
+            <div class="cb-name">${r.cat.name}</div>
+            <div class="cb-courts">${r.minCourts} <small>cancha${r.minCourts!==1?'s':''}</small></div>
+          </div>
+          <div class="cb-stats">
+            <div class="cb-stat"><div class="cb-stat-val">${r.cat.pairs}</div><div class="cb-stat-lbl">Parejas</div></div>
+            <div class="cb-stat"><div class="cb-stat-val">${r.totalMatches}</div><div class="cb-stat-lbl">Partidos</div></div>
+            <div class="cb-stat"><div class="cb-stat-val">${opts.hasFaseGrupos ? r.groups : '—'}</div><div class="cb-stat-lbl">Grupos</div></div>
+            <div class="cb-stat"><div class="cb-stat-val">${dur(r.totalMinutes)}</div><div class="cb-stat-lbl">Duración total</div></div>
+          </div>
+          ${advTxt ? `<div style="font-size:11px;color:var(--muted);margin-top:6px">${advTxt}</div>` : ''}
+          ${opts.hasFaseGrupos && opts.hasFaseFinal ? `
+          <div style="font-size:11px;color:var(--muted);margin-top:5px;display:flex;gap:12px">
+            <span>🔵 Grupos: ${r.grupMatches} partidos</span>
+            <span>🏆 Playoffs: ${r.finalMatches} partidos</span>
+          </div>` : ''}
+          ${numDays > 1 ? `
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+            ${r.days.map((d,di) => d.matches > 0 ? `
+              <div style="background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:4px 9px;font-size:11px;border-left:2px solid ${r.color}">
+                <span style="color:var(--muted)">Día ${di+1}:</span> <b>${d.matches}</b> partidos · <span style="color:var(--accent)">${d.phase}</span> · ${dur(d.minutes)}
+              </div>` : '').join('')}
+          </div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:11px;display:flex;align-items:center;gap:8px;">
+      TIMELINE POR JORNADA <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+
+    ${Array.from({ length: numDays }, (_, d) => {
+      const dayDur = durByDay[d];
+      const endMin = startMin + dayDur;
+      return `
+      <div style="margin-bottom:16px">
+        <div class="tl-day-badge">
+          📅 Día ${d+1}
+          &nbsp;·&nbsp; ${fmt(startMin)} → ${fmt(endMin)}
+          &nbsp;·&nbsp; ${dur(dayDur)}
+          ${dayDur > minsPerDay ? ' &nbsp;<span style="color:var(--danger)">⚠ excede jornada</span>' : ''}
+        </div>
+        ${renderDayTimeline(withDays, d, startMin, dayDur, minsPerDay)}
+      </div>`;
+    }).join('')}
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--muted);margin-bottom:9px">RESUMEN OPERATIVO</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px">
+        <div style="color:var(--muted)">Formato</div>
+        <div>${[opts.hasFaseGrupos?'Round Robin':'', opts.hasFaseFinal?'Playoffs':''].filter(Boolean).join(' + ') || '—'}</div>
+        <div style="color:var(--muted)">Slot por cancha</div>
+        <div>${base[0]?.slotMin||'—'} min (${document.getElementById('matchDuration').value}' partido + ${document.getElementById('pauseDuration').value}' pausa)</div>
+        <div style="color:var(--muted)">Horas disp. / día</div>
+        <div>${hoursPerDay}h &nbsp;→&nbsp; ${fmt(startMin)} a ${fmt(startMin + minsPerDay)}</div>
+        <div style="color:var(--muted)">Bye permitido</div>
+        <div>${opts.allowBye ? '✅ Sí' : '❌ No'}</div>
+        <div style="color:var(--muted)">Canchas ideales</div>
+        <div>${totalCourtsIdeal}${maxCourts > 0 && maxCourts < totalCourtsIdeal ? ` (limitado a ${maxCourts})` : ''}</div>
+        ${numDays > 1 ? `
+        <div style="color:var(--muted)">Distribución fases</div>
+        <div>${opts.hasFaseGrupos && opts.hasFaseFinal && numDays>=2 ? `Grupos días 1–${numDays-1} · Playoffs día ${numDays}` : 'Partidos distribuidos por igual'}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function renderDayTimeline(withDays, dayIdx, startMin, dayDuration, minsPerDay) {
+  if (!dayDuration) return `<div style="color:var(--muted);font-size:12px;padding:8px 0 0">Sin partidos este día.</div>`;
+
+  const HOUR_PX = 90;
+  const totalHours = Math.ceil(Math.max(dayDuration, minsPerDay) / 60) + 1;
+  const canvasW = totalHours * HOUR_PX;
+
+  let html = `<div class="tl-wrap">
+    <div style="overflow-x:auto">
+      <div style="min-width:${canvasW + 120}px">
+        <!-- axis -->
+        <div style="display:flex;margin-left:120px;border-bottom:1px solid var(--border);padding-bottom:3px;margin-bottom:8px">
+          ${Array.from({ length: totalHours + 1 }, (_, i) => {
+            const m = startMin + i * 60;
+            return `<div style="flex:none;width:${HOUR_PX}px;font-size:10px;color:var(--muted)">${fmt(m)}</div>`;
+          }).join('')}
+        </div>
+        <!-- available hours marker -->
+        ${minsPerDay < dayDuration ? `
+        <div style="position:relative;height:0;margin-left:120px">
+          <div style="position:absolute;left:${(minsPerDay/60)*HOUR_PX}px;top:-25px;height:999px;width:1px;background:rgba(255,77,109,0.35);pointer-events:none;z-index:1">
+            <div style="font-size:9px;color:var(--danger);white-space:nowrap;transform:translateX(3px)">Límite jornada</div>
+          </div>
+        </div>` : ''}
+        <!-- bars -->
+        ${withDays.map(r => {
+          const day = r.days[dayIdx];
+          if (!day || day.matches === 0) return '';
+          const barW = Math.max(4, (day.minutes / 60) * HOUR_PX);
+          const isPlayoff = day.phase === 'PLAYOFFS';
+          return `
+          <div style="display:flex;align-items:center;margin-bottom:5px">
+            <div style="width:120px;flex-shrink:0;font-size:11px;color:var(--muted);text-align:right;padding-right:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.cat.name}</div>
+            <div style="flex:1;height:24px;position:relative;background:var(--bg);border-radius:4px">
+              <div style="position:absolute;left:0;top:0;width:${barW}px;max-width:100%;height:100%;background:${r.color};opacity:${isPlayoff?'1':'0.7'};border-radius:3px;display:flex;align-items:center;padding:0 8px;font-size:10px;color:#000;font-weight:700;overflow:hidden;white-space:nowrap;gap:5px">
+                ${barW > 60 ? `<span>${day.phase}</span><span style="opacity:0.7">·</span><span>${day.matches} partidos</span><span style="opacity:0.7">·</span><span>${dur(day.minutes)}</span>` : ''}
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>`;
+  return html;
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+renderCats();
+recalcAll();
+</script>
+</body>
+</html>
