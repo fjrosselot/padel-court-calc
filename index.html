@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dimensionador de Canchas v1.1 — Torneo Americano de Pádel</title>
+<title>Dimensionador de Canchas v1.2 — Torneo Americano de Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -114,7 +114,7 @@
   <div class="logo-icon">🎾</div>
   <div style="display:flex;align-items:baseline;gap:10px">
     <h1>TORNEO AMERICANO <span>PÁDEL</span></h1>
-    <span class="version-badge">v1.1</span>
+    <span class="version-badge">v1.2</span>
   </div>
   <div class="header-sub">Dimensionador de canchas<br>& planificación operativa</div>
 </header>
@@ -168,9 +168,21 @@
         <span class="slider-unit">min</span>
       </div>
     </div>
-    <div class="g2">
-      <div class="field"><label>Hora inicio (cada día)</label><input type="time" id="startTime" value="09:00" onchange="recalcAll()"></div>
-      <div class="field"><label data-tip="Horas jugables por jornada">Horas disp. por día</label><input type="number" id="hoursPerDay" value="8" min="1" max="16" step="0.5" onchange="recalcAll()"></div>
+    <div class="field">
+      <label>Hora de inicio</label>
+      <div class="slider-row">
+        <input type="range" id="startTime" value="1080" min="1080" max="1200" step="30"
+          oninput="const m=+this.value; document.getElementById('startTimeVal').textContent=String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); recalcAll()">
+        <span class="slider-val" id="startTimeVal" style="font-size:16px;min-width:46px">18:00</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Horas disponibles por día</label>
+      <div class="slider-row">
+        <input type="range" id="hoursPerDay" value="2" min="1" max="3" step="0.5"
+          oninput="const h=+this.value; document.getElementById('hoursPerDayVal').textContent=Math.floor(h)+'h'+(h%1?'30':''); recalcAll()">
+        <span class="slider-val" id="hoursPerDayVal" style="font-size:16px;min-width:46px">2h</span>
+      </div>
     </div>
   </div>
 
@@ -344,13 +356,11 @@ const dur = (min) => `${Math.floor(min/60)}h${min%60>0?(min%60)+'m':''}`;
 function recalcAll() {
   const numDays = Math.max(1, +document.getElementById('numDays').value || 1);
   const maxCourts = +document.getElementById('maxCourts').value || 0;
-  const hoursPerDay = parseFloat(document.getElementById('hoursPerDay').value) || 8;
+  const hoursPerDay = parseFloat(document.getElementById('hoursPerDay').value) || 2;
   const minsPerDay = hoursPerDay * 60;
-  const startTimeStr = document.getElementById('startTime').value || '09:00';
+  const startMin = +document.getElementById('startTime').value || 1080;
   const matchMin = +document.getElementById('matchDuration').value || 30;
   const pauseMin = Number(document.getElementById('pauseDuration').value);
-  const [sh, sm] = startTimeStr.split(':').map(Number);
-  const startMin = sh * 60 + sm;
 
   const base = categories.map(calcCategory);
   const withDays = base.map((r, i) => ({ ...r, color: CAT_COLORS[i % CAT_COLORS.length], days: distributeDays(r, numDays) }));
