@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Campeonatos v2.0 — Pádel</title>
+<title>Simulador Campeonatos v2.1 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -141,7 +141,7 @@
   <div class="logo-icon">🎾</div>
   <div style="display:flex;align-items:baseline;gap:10px">
     <h1>SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v2.0</span>
+    <span class="version-badge">v2.1</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -383,11 +383,16 @@ function calcCategory(cat) {
 //   numDays = 1  → everything in 1 day
 //   numDays >= 2, both phases → grupos days 1..N-1, playoffs last day
 //   numDays >= 2, single phase → distribute matches evenly across days
-function distributeDays(r, numDays) {
+function distributeDays(r, numDays, activeCourts) {
+  if (!activeCourts) activeCourts = r.minCourts;
   const days = Array.from({ length: numDays }, () => ({ matches: 0, minutes: 0, phase: '' }));
 
   if (numDays === 1) {
-    days[0] = { matches: r.totalMatches, minutes: r.totalMinutes, phase: 'TODO' };
+    // Si hay restricción de canchas, recalcular tiempo real con esas canchas
+    const mins = activeCourts >= r.minCourts
+      ? r.totalMinutes
+      : Math.ceil(r.totalMatches / activeCourts) * r.slotMin;
+    days[0] = { matches: r.totalMatches, minutes: mins, phase: 'TODO' };
     return days;
   }
 
@@ -400,11 +405,11 @@ function distributeDays(r, numDays) {
     for (let d = 0; d < groupDays; d++) {
       const m = Math.ceil(remaining / (groupDays - d));
       days[d].matches = m;
-      days[d].minutes = Math.ceil(m / r.minCourts) * r.slotMin;
+      days[d].minutes = Math.ceil(m / activeCourts) * r.slotMin;
       days[d].phase = 'GRUPOS';
       remaining -= m;
     }
-    const finalCourts = Math.max(1, Math.ceil(r.minCourts / 2));
+    const finalCourts = Math.max(1, Math.ceil(activeCourts / 2));
     days[numDays - 1].matches = r.finalMatches;
     days[numDays - 1].minutes = Math.ceil(r.finalMatches / finalCourts) * r.slotMin;
     days[numDays - 1].phase = 'PLAYOFFS';
@@ -416,7 +421,7 @@ function distributeDays(r, numDays) {
     for (let d = 0; d < numDays; d++) {
       const m = Math.ceil(remaining / (numDays - d));
       days[d].matches = m;
-      days[d].minutes = Math.ceil(m / r.minCourts) * r.slotMin;
+      days[d].minutes = Math.ceil(m / activeCourts) * r.slotMin;
       days[d].phase = phase;
       remaining -= m;
     }
@@ -652,7 +657,20 @@ function recalcAll() {
   const pauseMin = Number(document.getElementById('pauseDuration').value);
 
   const base = categories.map(calcCategory);
-  const withDays = base.map((r, i) => ({ ...r, color: CAT_COLORS[i % CAT_COLORS.length], days: distributeDays(r, numDays) }));
+  const totalCourtsIdeal = base.reduce((s, r) => s + r.minCourts, 0);
+
+  // Distribuir canchas disponibles proporcionalmente entre categorías (mínimo 1 por cat)
+  const courtsPerCat = base.map(r => {
+    if (maxCourts === 0 || maxCourts >= totalCourtsIdeal) return r.minCourts;
+    return Math.max(1, Math.round(maxCourts * r.minCourts / totalCourtsIdeal));
+  });
+
+  const withDays = base.map((r, i) => ({
+    ...r,
+    color: CAT_COLORS[i % CAT_COLORS.length],
+    activeCourts: courtsPerCat[i],
+    days: distributeDays(r, numDays, courtsPerCat[i])
+  }));
 
   // Update info box
   const infoBox = document.getElementById('dayLogicInfo');
@@ -666,8 +684,6 @@ function recalcAll() {
     infoBox.style.display = 'none';
   }
 
-  const totalCourtsIdeal = base.reduce((s, r) => s + r.minCourts, 0);
-  const effectiveCourts = maxCourts > 0 ? Math.min(maxCourts, totalCourtsIdeal) : totalCourtsIdeal;
   const totalMatches = base.reduce((s, r) => s + r.totalMatches, 0);
 
   // Duration per day across categories
@@ -701,10 +717,20 @@ function recalcAll() {
     badge.style.border = '1px solid rgba(0,229,160,0.3)';
     badge.innerHTML = `<span style="color:var(--accent)">✅ ${maxCourts} canchas disponibles — suficientes</span> <span style="color:var(--muted)">(mínimo ideal: ${totalCourtsIdeal})</span>`;
   } else {
+    // Canchas insuficientes para el ideal: verificar si el tiempo alcanza
+    const fitsInTime = maxDayDur <= minsPerDay;
     badge.style.display = 'block';
-    badge.style.background = 'rgba(255,77,109,0.07)';
-    badge.style.border = '1px solid rgba(255,77,109,0.3)';
-    badge.innerHTML = `<span style="color:var(--danger)">⚠️ ${maxCourts} canchas disponibles — faltan <b>${totalCourtsIdeal - maxCourts}</b> para el ideal</span><br><span style="color:var(--muted)">El torneo tomará más tiempo o necesitarás más días.</span>`;
+    if (fitsInTime) {
+      badge.style.background = 'rgba(255,190,0,0.07)';
+      badge.style.border = '1px solid rgba(255,190,0,0.35)';
+      badge.innerHTML = `<span style="color:#ffbe00">⚠️ ${maxCourts} canchas disponibles (ideal: ${totalCourtsIdeal}) — el torneo cabe en el tiempo disponible</span><br><span style="color:var(--muted)">La jornada más larga toma ${dur(maxDayDur)} con las canchas distribuidas. El campeonato es viable.</span>`;
+    } else {
+      badge.style.background = 'rgba(255,77,109,0.07)';
+      badge.style.border = '1px solid rgba(255,77,109,0.3)';
+      const neededCourts = courtsNeededByDay[longestDayIdx];
+      const neededHours = Math.ceil(maxDayDur / 30) * 0.5;
+      badge.innerHTML = `<span style="color:var(--danger)">⚠️ ${maxCourts} canchas — jornada más larga: ${dur(maxDayDur)} vs ${hoursPerDay}h disponibles</span><br><span style="color:var(--muted)">Opciones: lleva las canchas a <b>${neededCourts}</b>, amplía el horario a <b>${neededHours}h</b>, o agrega más días al torneo.</span>`;
+    }
   }
 
   // Warnings
@@ -714,11 +740,10 @@ function recalcAll() {
     if (!opts.allowBye && r.cat.pairs % 2 !== 0) warnings.push({ t:'info', msg:`"${r.cat.name}": nº impar de parejas sin bye → se agrega 1 pareja ficticia para cuadrar grupos (${r.effectivePairs} parejas efectivas, ${r.totalMatches} partidos).` });
     if (r.cat.pairs < 2) warnings.push({ t:'danger', msg:`"${r.cat.name}": mínimo 2 parejas.` });
   });
-  if (maxCourts > 0 && totalCourtsIdeal > maxCourts) warnings.push({ t:'info', msg:`Con ${maxCourts} canchas el torneo tomará más tiempo que con el mínimo ideal de ${totalCourtsIdeal}.` });
   durByDay.forEach((d, i) => {
     if (d > minsPerDay) {
       const needed = courtsNeededByDay[i];
-      warnings.push({ t:'danger', msg:`Día ${i+1}: requiere ${dur(d)} pero solo hay ${hoursPerDay}h disponibles. Necesitas al menos <b>${needed} canchas</b> en total para completarlo en un día, o agrega más días.` });
+      warnings.push({ t:'danger', msg:`Día ${i+1}: con ${courtsPerCat.reduce((a,b)=>a+b,0)} canchas se necesitan ${dur(d)} pero solo hay ${hoursPerDay}h. Agrega más horas al día, más días al torneo, o más canchas.` });
     }
   });
 
@@ -760,7 +785,7 @@ function recalcAll() {
     ${warningsHtml}
 
     <div class="kpi-grid">
-      <div class="kpi-card hi"><div class="kpi-val">${totalCourtsIdeal}</div><div class="kpi-label">Canchas mínimas necesarias${maxCourts > 0 && maxCourts < totalCourtsIdeal ? ` <span style="color:var(--danger);font-size:9px">(tienes ${maxCourts})</span>` : maxCourts >= totalCourtsIdeal && maxCourts > 0 ? ` <span style="color:var(--accent);font-size:9px">(tienes ${maxCourts} ✅)</span>` : ''}</div></div>
+      <div class="kpi-card ${maxCourts > 0 && maxCourts < totalCourtsIdeal && maxDayDur > minsPerDay ? 'wn' : 'hi'}"><div class="kpi-val">${maxCourts > 0 ? maxCourts : totalCourtsIdeal}</div><div class="kpi-label">${maxCourts > 0 ? 'Canchas disponibles' : 'Canchas mínimas necesarias'}${maxCourts > 0 && maxCourts < totalCourtsIdeal ? ` <span style="color:var(--muted);font-size:9px">(ideal: ${totalCourtsIdeal})</span>` : maxCourts >= totalCourtsIdeal && maxCourts > 0 ? ` <span style="color:var(--accent);font-size:9px">✅</span>` : ''}</div></div>
       <div class="kpi-card"><div class="kpi-val">${totalMatches}</div><div class="kpi-label">Partidos totales</div></div>
       <div class="kpi-card"><div class="kpi-val">${numDays}</div><div class="kpi-label">Días de torneo</div></div>
       <div class="kpi-card ${maxDayDur > minsPerDay ? 'wn' : ''}">
@@ -783,7 +808,7 @@ function recalcAll() {
           <div class="cb-header">
             <div class="cb-dot" style="background:${r.color}"></div>
             <div class="cb-name">${r.cat.name}</div>
-            <div class="cb-courts">${r.minCourts} <small>cancha${r.minCourts!==1?'s':''}</small></div>
+            <div class="cb-courts">${r.activeCourts} <small>cancha${r.activeCourts!==1?'s':''}</small>${r.activeCourts < r.minCourts ? ` <small style="color:var(--muted)">(ideal: ${r.minCourts})</small>` : ''}</div>
           </div>
           <div class="cb-stats">
             <div class="cb-stat"><div class="cb-stat-val">${r.cat.pairs}</div><div class="cb-stat-lbl">Parejas</div></div>
@@ -839,8 +864,8 @@ function recalcAll() {
         <div>${hoursPerDay}h &nbsp;→&nbsp; ${fmt(startMin)} a ${fmt(startMin + minsPerDay)}</div>
         <div style="color:var(--muted)">Bye permitido</div>
         <div>${opts.allowBye ? '✅ Sí' : '❌ No'}</div>
-        <div style="color:var(--muted)">Canchas ideales</div>
-        <div>${totalCourtsIdeal}${maxCourts > 0 && maxCourts < totalCourtsIdeal ? ` (limitado a ${maxCourts})` : ''}</div>
+        <div style="color:var(--muted)">Canchas</div>
+        <div>${maxCourts > 0 && maxCourts < totalCourtsIdeal ? `${maxCourts} disponibles <span style="color:var(--muted)">(ideal: ${totalCourtsIdeal})</span>` : totalCourtsIdeal + ' (mínimo ideal)'}</div>
         ${numDays > 1 ? `
         <div style="color:var(--muted)">Distribución fases</div>
         <div>${opts.hasFaseGrupos && opts.hasFaseFinal && numDays>=2 ? `Grupos días 1–${numDays-1} · Playoffs día ${numDays}` : 'Partidos distribuidos por igual'}</div>` : ''}
