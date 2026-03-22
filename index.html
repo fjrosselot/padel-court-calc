@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Campeonatos v1.7 — Pádel</title>
+<title>Simulador Campeonatos v1.8 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -141,7 +141,7 @@
   <div class="logo-icon">🎾</div>
   <div style="display:flex;align-items:baseline;gap:10px">
     <h1>SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v1.7</span>
+    <span class="version-badge">v1.8</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -437,6 +437,8 @@ function buildFixture(withDays, startMinBase, matchMin, pauseMin) {
   const ppg = +document.getElementById('pairsPerGroup').value || 4;
   const blocks = [];
   let courtOffset = 0;
+  let matchNum = 1;
+  const nextId = () => `P${String(matchNum++).padStart(2,'0')}`;
 
   for (const r of withDays) {
     const catStart = courtOffset;
@@ -451,6 +453,7 @@ function buildFixture(withDays, startMinBase, matchMin, pauseMin) {
           const courtsThisGroup = Math.min(courtsPerGroup, r.minCourts - g * courtsPerGroup);
           for (let m = 0; m < courtsThisGroup; m++) {
             blocks.push({
+              id: nextId(),
               court: catStart + g * courtsPerGroup + m,
               startMin: t, endMin: t + matchMin,
               label: `Grp ${String.fromCharCode(65+g)} R${rnd+1}`,
@@ -466,7 +469,7 @@ function buildFixture(withDays, startMinBase, matchMin, pauseMin) {
       const rounds = n % 2 === 0 ? n - 1 : (opts.allowBye ? n : n - 1);
       for (let rnd = 0; rnd < rounds; rnd++) {
         for (let m = 0; m < Math.floor(n / 2); m++) {
-          blocks.push({ court: catStart + m, startMin: t, endMin: t + matchMin,
+          blocks.push({ id: nextId(), court: catStart + m, startMin: t, endMin: t + matchMin,
             label: `R${rnd+1}`, color: r.color, phase: 'RR', catName: r.cat.name });
         }
         t += slotMin;
@@ -487,14 +490,14 @@ function buildFixture(withDays, startMinBase, matchMin, pauseMin) {
         if (isFinal) finalRoundT = goldT;
         const rname = isFinal ? '🥇 Final' : matches === 2 ? '🥇 Semis' : `🥇 R${pr+1}`;
         for (let m = 0; m < matches; m++) {
-          blocks.push({ court: goldCourtStart + m, startMin: goldT, endMin: goldT + matchMin,
+          blocks.push({ id: nextId(), court: goldCourtStart + m, startMin: goldT, endMin: goldT + matchMin,
             label: rname, color: r.color, phase: 'PLAYOFFS', catName: r.cat.name });
         }
         goldT += slotMin; matches = Math.floor(matches / 2); pr++;
       }
       // 3er lugar: paralelo con la final, en la cancha +1 (libre en la ronda final)
       if (opts.hasThirdPlace && r.adv >= 4) {
-        blocks.push({ court: goldCourtStart + 1, startMin: finalRoundT, endMin: finalRoundT + matchMin,
+        blocks.push({ id: nextId(), court: goldCourtStart + 1, startMin: finalRoundT, endMin: finalRoundT + matchMin,
           label: '🥉 3° Lugar', color: r.color, phase: '3RD', catName: r.cat.name });
       }
 
@@ -507,7 +510,7 @@ function buildFixture(withDays, startMinBase, matchMin, pauseMin) {
         while (sMatches >= 1) {
           const rname = sMatches === 1 ? '🥈 Final' : sMatches === 2 ? '🥈 Semis' : `🥈 R${sp+1}`;
           for (let m = 0; m < sMatches; m++) {
-            blocks.push({ court: silverCourtStart + m, startMin: silverT, endMin: silverT + matchMin,
+            blocks.push({ id: nextId(), court: silverCourtStart + m, startMin: silverT, endMin: silverT + matchMin,
               label: rname, color: r.color, phase: 'PLATA', catName: r.cat.name });
           }
           silverT += slotMin; sMatches = Math.floor(sMatches / 2); sp++;
@@ -573,7 +576,7 @@ function renderFixtureCalendar(blocks, totalCourts, startMinBase, endMinDisplay,
       blockHtml += `
         <div class="fixture-block" style="left:${x}px;width:${w - 2}px;height:32px;background:${b.color};opacity:${opacity}"
           title="${b.catName} · ${b.phase} · ${fmt(b.startMin)}–${fmt(b.endMin)}">
-          ${w > 35 ? `<span style="font-size:9px;font-weight:700;color:#000;white-space:nowrap;overflow:hidden;max-width:100%;text-align:center">${b.label}</span>` : ''}
+          ${w > 65 ? `<span style="font-size:8px;color:#0006;font-weight:600;line-height:1">${b.id}</span><span style="font-size:9px;font-weight:700;color:#000;white-space:nowrap;overflow:hidden;max-width:100%;text-align:center;line-height:1.2">${b.label}</span>` : w > 28 ? `<span style="font-size:9px;font-weight:700;color:#000">${b.id}</span>` : ''}
         </div>`;
     }
 
@@ -601,6 +604,41 @@ function renderFixtureCalendar(blocks, totalCourts, startMinBase, endMinDisplay,
     </div>`;
 
   return `<div class="fixture-grid">${axisHtml}${rowsHtml}${legendHtml}</div>`;
+}
+
+// ── LISTADO ───────────────────────────────────────────────────────────────────
+function renderListado(blocks) {
+  if (!blocks.length) return '<div style="color:var(--muted);padding:20px">Sin partidos para mostrar.</div>';
+  const sorted = [...blocks].sort((a, b) => a.startMin - b.startMin || a.court - b.court);
+  const phaseLabel = { GRUPOS:'🔵 Grupos', PLAYOFFS:'🥇 Copa Oro', PLATA:'🥈 Copa Plata', '3RD':'🥉 3° Lugar', RR:'Round Robin' };
+  const rows = sorted.map((b, i) => `
+    <tr style="border-top:1px solid var(--border);background:${i%2===0?'transparent':'rgba(255,255,255,0.02)'}">
+      <td style="padding:8px 12px;font-weight:700;color:${b.color};font-family:'Bebas Neue',sans-serif;letter-spacing:1px">${b.id}</td>
+      <td style="padding:8px 12px;white-space:nowrap">Cancha ${b.court+1}</td>
+      <td style="padding:8px 12px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:var(--accent)">${fmt(b.startMin)}</td>
+      <td style="padding:8px 12px;color:var(--muted)">${fmt(b.endMin)}</td>
+      <td style="padding:8px 12px">
+        <span style="display:inline-flex;align-items:center;gap:5px">
+          <span style="width:7px;height:7px;border-radius:50%;background:${b.color};flex-shrink:0;display:inline-block"></span>${b.catName}
+        </span>
+      </td>
+      <td style="padding:8px 12px;font-size:11px">${phaseLabel[b.phase]||b.phase}</td>
+      <td style="padding:8px 12px;color:var(--muted);font-size:11px">${b.label}</td>
+    </tr>`).join('');
+  return `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:var(--bg)">
+            ${['ID','Cancha','Inicio','Fin','Categoría','Fase','Detalle'].map(h =>
+              `<th style="padding:10px 12px;text-align:left;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;font-size:11px;color:var(--muted);white-space:nowrap">${h}</th>`
+            ).join('')}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--muted);text-align:right">${blocks.length} partidos en total</div>`;
 }
 
 // ── RENDER ───────────────────────────────────────────────────────────────────
@@ -688,6 +726,7 @@ function recalcAll() {
     <div class="tab-bar">
       <button class="tab-btn ${currentView==='resumen'?'active':''}" onclick="switchView('resumen')">📊 RESUMEN</button>
       <button class="tab-btn ${currentView==='fixture'?'active':''}" onclick="switchView('fixture')">🗓️ FIXTURE</button>
+      <button class="tab-btn ${currentView==='listado'?'active':''}" onclick="switchView('listado')">📋 LISTADO</button>
     </div>`;
 
   const warningsHtml = warnings.length ? `<div class="warnings">${warnings.map(w =>
@@ -695,16 +734,25 @@ function recalcAll() {
 
   const main = document.getElementById('mainContent');
 
-  if (currentView === 'fixture') {
+  if (currentView === 'fixture' || currentView === 'listado') {
     const fixtureBlocks = buildFixture(withDays, startMin, matchMin, pauseMin);
     const maxBlockEnd = fixtureBlocks.length ? Math.max(...fixtureBlocks.map(b => b.endMin)) : startMin + minsPerDay;
     const endDisplay = Math.max(maxBlockEnd, startMin + minsPerDay);
-    main.innerHTML = tabBar + warningsHtml + `
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:11px;display:flex;align-items:center;gap:8px;">
-        SIMULADOR DE FIXTURE <div style="flex:1;height:1px;background:var(--border)"></div>
-        <span style="font-size:11px;color:var(--muted);font-family:'DM Sans',sans-serif;letter-spacing:0;font-weight:400">${fmt(startMin)} → ${fmt(endDisplay)} · ${totalCourtsIdeal} canchas</span>
-      </div>
-      ${renderFixtureCalendar(fixtureBlocks, totalCourtsIdeal, startMin, endDisplay, withDays)}`;
+
+    if (currentView === 'fixture') {
+      main.innerHTML = tabBar + warningsHtml + `
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:11px;display:flex;align-items:center;gap:8px;">
+          SIMULADOR DE FIXTURE <div style="flex:1;height:1px;background:var(--border)"></div>
+          <span style="font-size:11px;color:var(--muted);font-family:'DM Sans',sans-serif;letter-spacing:0;font-weight:400">${fmt(startMin)} → ${fmt(endDisplay)} · ${totalCourtsIdeal} canchas</span>
+        </div>
+        ${renderFixtureCalendar(fixtureBlocks, totalCourtsIdeal, startMin, endDisplay, withDays)}`;
+    } else {
+      main.innerHTML = tabBar + warningsHtml + `
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:11px;display:flex;align-items:center;gap:8px;">
+          LISTADO DE PARTIDOS <div style="flex:1;height:1px;background:var(--border)"></div>
+        </div>
+        ${renderListado(fixtureBlocks)}`;
+    }
     return;
   }
 
