@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Campeonatos v1.6 — Pádel</title>
+<title>Simulador Campeonatos v1.7 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -141,7 +141,7 @@
   <div class="logo-icon">🎾</div>
   <div style="display:flex;align-items:baseline;gap:10px">
     <h1>SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v1.6</span>
+    <span class="version-badge">v1.7</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -189,6 +189,10 @@
     <div class="toggle-row" id="copasToggleRow" onclick="toggleOpt('hasCopas')" style="display:flex">
       <span data-tip="Los no clasificados juegan su propio bracket de consolación (Copa de Plata)">🥇 Copa de Oro / 🥈 Plata</span>
       <div class="toggle" id="tog_hasCopas"></div>
+    </div>
+    <div class="toggle-row" id="thirdPlaceToggleRow" onclick="toggleOpt('hasThirdPlace')" style="display:flex">
+      <span data-tip="Los perdedores de las semifinales disputan el 3er puesto">🥉 Partido por 3er lugar</span>
+      <div class="toggle" id="tog_hasThirdPlace"></div>
     </div>
     <div class="toggle-row" onclick="toggleOpt('allowBye')">
       <span data-tip="Pareja sin rival en una ronda (nº impar de parejas)">Permitir pareja libre (bye)</span>
@@ -256,7 +260,7 @@
 const CAT_COLORS = ['#00e5a0','#ff6b35','#ffd166','#a78bfa','#60a5fa','#f472b6','#34d399','#fb923c'];
 let categories = [{ id:1, name:'Masculino A', pairs:8 }, { id:2, name:'Femenino B', pairs:6 }];
 let nextId = 3;
-let opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false };
+let opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false };
 let currentView = 'resumen'; // 'resumen' | 'fixture'
 function switchView(v) { currentView = v; recalcAll(); }
 
@@ -294,6 +298,8 @@ function toggleOpt(key) {
   const canHaveCopas = opts.hasFaseGrupos && opts.hasFaseFinal;
   document.getElementById('copasToggleRow').style.display = canHaveCopas ? 'flex' : 'none';
   if (!canHaveCopas) { opts.hasCopas = false; document.getElementById('tog_hasCopas').className = 'toggle'; }
+  document.getElementById('thirdPlaceToggleRow').style.display = opts.hasFaseFinal ? 'flex' : 'none';
+  if (!opts.hasFaseFinal) { opts.hasThirdPlace = false; document.getElementById('tog_hasThirdPlace').className = 'toggle'; }
   recalcAll();
 }
 
@@ -349,7 +355,10 @@ function calcCategory(cat) {
     }
   }
 
-  const totalMatches = grupMatches + finalMatches + silverMatches;
+  // Partido por 3er lugar: los perdedores de semis juegan en paralelo con la final
+  const thirdPlaceMatch = (opts.hasThirdPlace && opts.hasFaseFinal && adv >= 4) ? 1 : 0;
+
+  const totalMatches = grupMatches + finalMatches + silverMatches + thirdPlaceMatch;
 
   // Courts needed: max simultaneous matches in any round
   const courtsGroup = opts.hasFaseGrupos ? groups * Math.floor(ppg / 2) : Math.ceil(effectivePairs / 2);
@@ -472,13 +481,21 @@ function buildFixture(withDays, startMinBase, matchMin, pauseMin) {
       // Copa de Oro
       let size = 1; while (size < r.adv) size *= 2;
       let matches = size / 2, pr = 0;
+      let finalRoundT = goldT;
       while (matches >= 1) {
-        const rname = matches === 1 ? '🥇 Final' : matches === 2 ? '🥇 Semis' : `🥇 R${pr+1}`;
+        const isFinal = matches === 1;
+        if (isFinal) finalRoundT = goldT;
+        const rname = isFinal ? '🥇 Final' : matches === 2 ? '🥇 Semis' : `🥇 R${pr+1}`;
         for (let m = 0; m < matches; m++) {
           blocks.push({ court: goldCourtStart + m, startMin: goldT, endMin: goldT + matchMin,
             label: rname, color: r.color, phase: 'PLAYOFFS', catName: r.cat.name });
         }
         goldT += slotMin; matches = Math.floor(matches / 2); pr++;
+      }
+      // 3er lugar: paralelo con la final, en la cancha +1 (libre en la ronda final)
+      if (opts.hasThirdPlace && r.adv >= 4) {
+        blocks.push({ court: goldCourtStart + 1, startMin: finalRoundT, endMin: finalRoundT + matchMin,
+          label: '🥉 3° Lugar', color: r.color, phase: '3RD', catName: r.cat.name });
       }
 
       // Copa de Plata (si está habilitada)
@@ -552,7 +569,7 @@ function renderFixtureCalendar(blocks, totalCourts, startMinBase, endMinDisplay,
     for (const b of courtBlocks) {
       const x = (b.startMin - startMinBase) * MIN_PX;
       const w = (b.endMin - b.startMin) * MIN_PX;
-      const opacity = b.phase === 'PLAYOFFS' ? '1' : b.phase === 'PLATA' ? '0.55' : '0.72';
+      const opacity = b.phase === 'PLAYOFFS' ? '1' : b.phase === '3RD' ? '0.85' : b.phase === 'PLATA' ? '0.55' : '0.72';
       blockHtml += `
         <div class="fixture-block" style="left:${x}px;width:${w - 2}px;height:32px;background:${b.color};opacity:${opacity}"
           title="${b.catName} · ${b.phase} · ${fmt(b.startMin)}–${fmt(b.endMin)}">
@@ -580,7 +597,7 @@ function renderFixtureCalendar(blocks, totalCourts, startMinBase, endMinDisplay,
         <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)">
           <div style="width:10px;height:10px;border-radius:2px;background:${color}"></div>${name}
         </div>`).join('')}
-      <div style="margin-left:auto;font-size:10px;color:var(--muted)">Grupos 72% · 🥇 Oro 100% · 🥈 Plata 55%</div>
+      <div style="margin-left:auto;font-size:10px;color:var(--muted)">Grupos 72% · 🥇 Oro 100% · 🥉 3° 85% · 🥈 Plata 55%</div>
     </div>`;
 
   return `<div class="fixture-grid">${axisHtml}${rowsHtml}${legendHtml}</div>`;
@@ -880,12 +897,13 @@ function applyConfig(data) {
   document.getElementById('pairsPerGroup').value = data.pairsPerGroup;
   document.getElementById('advancePerGroup').value = data.advancePerGroup;
 
-  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas'].forEach(k => {
+  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas','hasThirdPlace'].forEach(k => {
     document.getElementById('tog_' + k).className = 'toggle' + (opts[k] ? ' on' : '');
   });
   document.getElementById('gruposOptions').style.display = opts.hasFaseGrupos ? 'block' : 'none';
   const canHaveCopas = opts.hasFaseGrupos && opts.hasFaseFinal;
   document.getElementById('copasToggleRow').style.display = canHaveCopas ? 'flex' : 'none';
+  document.getElementById('thirdPlaceToggleRow').style.display = opts.hasFaseFinal ? 'flex' : 'none';
   renderCats();
   recalcAll();
 }
