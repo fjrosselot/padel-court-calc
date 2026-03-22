@@ -3,8 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dimensionador de Canchas v1.3 — Torneo Americano de Pádel</title>
+<title>Simulador Campeonatos v1.4 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <style>
   :root {
     --bg: #0d0f14; --surface: #161a23; --border: #2a2f3e;
@@ -114,6 +116,18 @@
   .fixture-axis { display: flex; margin-left: 100px; height: 20px; position: relative; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
   .fixture-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(42,47,62,0.6); pointer-events: none; }
 
+  .sim-item { display:flex; align-items:center; gap:8px; background:var(--bg); border:1px solid var(--border); border-radius:7px; padding:8px 10px; margin-bottom:5px; transition:border-color 0.2s; cursor:default; }
+  .sim-item:hover { border-color:rgba(0,229,160,0.3); }
+  .sim-item.sim-active { border-color:var(--accent); background:rgba(0,229,160,0.05); }
+  .sim-name { font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sim-name:hover { color:var(--accent); }
+  .sim-btn-del { background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; padding:0 2px; flex-shrink:0; line-height:1; transition:color 0.2s; }
+  .sim-btn-del:hover { color:var(--danger); }
+  .save-sim-btn { width:100%; background:var(--accent); color:#000; border:none; padding:9px; border-radius:7px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:opacity 0.15s; }
+  .save-sim-btn:hover { opacity:0.85; }
+  .save-sim-btn-sec { width:100%; background:transparent; border:1px dashed var(--border); color:var(--muted); padding:7px; border-radius:7px; font-family:'DM Sans',sans-serif; font-size:12px; cursor:pointer; margin-top:5px; transition:all 0.15s; }
+  .save-sim-btn-sec:hover { border-color:var(--accent); color:var(--accent); }
+
   @media (max-width: 800px) {
     .container { grid-template-columns: 1fr; }
     .sidebar { position: static; max-height: none; }
@@ -126,14 +140,29 @@
 <header>
   <div class="logo-icon">🎾</div>
   <div style="display:flex;align-items:baseline;gap:10px">
-    <h1>TORNEO AMERICANO <span>PÁDEL</span></h1>
-    <span class="version-badge">v1.3</span>
+    <h1>SIMULADOR <span>CAMPEONATOS</span></h1>
+    <span class="version-badge">v1.4</span>
   </div>
-  <div class="header-sub">Dimensionador de canchas<br>& planificación operativa</div>
+  <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
 
 <div class="container">
 <aside class="sidebar">
+
+  <div class="section">
+    <div class="section-title">Simulaciones</div>
+    <div id="simList"><div style="color:var(--muted);font-size:12px;padding:4px 0">Cargando...</div></div>
+    <div id="saveForm" style="display:none;margin-top:8px">
+      <input type="text" id="simNameInput" placeholder="Nombre del campeonato..."
+        style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 11px;border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;margin-bottom:6px"
+        onkeydown="if(event.key==='Enter')confirmSave();if(event.key==='Escape')cancelSave()">
+      <div style="display:flex;gap:6px">
+        <button onclick="confirmSave()" style="flex:1;background:var(--accent);color:#000;border:none;padding:8px;border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer">Guardar</button>
+        <button onclick="cancelSave()" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:8px 12px;border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer">×</button>
+      </div>
+    </div>
+    <div id="saveBtnContainer" style="margin-top:8px"></div>
+  </div>
 
   <div class="section">
     <div class="section-title">Categorías</div>
@@ -752,9 +781,149 @@ function renderDayTimeline(withDays, dayIdx, startMin, dayDuration, minsPerDay) 
   return html;
 }
 
+// ── FIREBASE ─────────────────────────────────────────────────────────────────
+firebase.initializeApp({
+  apiKey: "AIzaSyB1dB2bK53wtRtPlkI8Mwvu3APwzzWHxlk",
+  authDomain: "padel-court-calc.firebaseapp.com",
+  projectId: "padel-court-calc",
+  storageBucket: "padel-court-calc.firebasestorage.app",
+  messagingSenderId: "387261045443",
+  appId: "1:387261045443:web:bef74fa2288aad1a36e076"
+});
+const db = firebase.firestore();
+const SIM_COL = 'padel_simulations';
+let currentSimId = null;
+let currentSimName = null;
+
+const fmtTime = (m) => String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0');
+const fmtHours = (h) => Math.floor(h) + 'h' + (h % 1 ? '30' : '');
+
+function getCurrentConfig() {
+  return {
+    categories: JSON.parse(JSON.stringify(categories)),
+    opts: { ...opts },
+    matchDuration: +document.getElementById('matchDuration').value,
+    pauseDuration: Number(document.getElementById('pauseDuration').value),
+    startTime: +document.getElementById('startTime').value,
+    hoursPerDay: parseFloat(document.getElementById('hoursPerDay').value),
+    numDays: +document.getElementById('numDays').value,
+    maxCourts: +document.getElementById('maxCourts').value,
+    pairsPerGroup: +document.getElementById('pairsPerGroup').value,
+    advancePerGroup: +document.getElementById('advancePerGroup').value,
+  };
+}
+
+function applyConfig(data) {
+  categories = data.categories || categories;
+  nextId = Math.max(...categories.map(c => c.id), 0) + 1;
+  opts = { ...data.opts };
+
+  const setSlider = (id, valId, val, displayFn) => {
+    document.getElementById(id).value = val;
+    document.getElementById(valId).textContent = displayFn ? displayFn(val) : val;
+  };
+  setSlider('matchDuration', 'matchDurationVal', data.matchDuration);
+  setSlider('pauseDuration', 'pauseDurationVal', data.pauseDuration);
+  setSlider('startTime', 'startTimeVal', data.startTime, fmtTime);
+  setSlider('hoursPerDay', 'hoursPerDayVal', data.hoursPerDay, fmtHours);
+  document.getElementById('numDays').value = data.numDays;
+  document.getElementById('maxCourts').value = data.maxCourts;
+  document.getElementById('pairsPerGroup').value = data.pairsPerGroup;
+  document.getElementById('advancePerGroup').value = data.advancePerGroup;
+
+  ['hasFaseGrupos','hasFaseFinal','allowBye'].forEach(k => {
+    document.getElementById('tog_' + k).className = 'toggle' + (opts[k] ? ' on' : '');
+  });
+  document.getElementById('gruposOptions').style.display = opts.hasFaseGrupos ? 'block' : 'none';
+  renderCats();
+  recalcAll();
+}
+
+async function loadSimList() {
+  const el = document.getElementById('simList');
+  try {
+    const snap = await db.collection(SIM_COL).orderBy('updatedAt','desc').get();
+    const sims = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!sims.length) {
+      el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:4px 0">Sin simulaciones aún.</div>';
+      return;
+    }
+    el.innerHTML = sims.map(s => {
+      const isActive = s.id === currentSimId;
+      const date = s.updatedAt?.toDate ? s.updatedAt.toDate().toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit'}) : '';
+      return `<div class="sim-item${isActive?' sim-active':''}">
+        <div style="flex:1;min-width:0" onclick="loadSimulation('${s.id}')">
+          <div class="sim-name">${s.name}</div>
+          <div style="font-size:10px;color:var(--muted)">${(s.categories||[]).length} cat. · ${date}</div>
+        </div>
+        <button class="sim-btn-del" onclick="deleteSimulation('${s.id}')" title="Eliminar">×</button>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--danger);font-size:11px">Error al conectar con Firebase</div>';
+  }
+}
+
+function renderSaveBtn() {
+  const c = document.getElementById('saveBtnContainer');
+  c.innerHTML = currentSimId
+    ? `<button class="save-sim-btn" onclick="showSaveForm(false)">💾 Actualizar "${currentSimName}"</button>
+       <button class="save-sim-btn-sec" onclick="showSaveForm(true)">＋ Guardar como nuevo</button>`
+    : `<button class="save-sim-btn" onclick="showSaveForm(false)">💾 Guardar simulación</button>`;
+}
+
+function showSaveForm(asNew) {
+  const form = document.getElementById('saveForm');
+  const input = document.getElementById('simNameInput');
+  form._asNew = asNew;
+  input.value = (!asNew && currentSimName) ? currentSimName : '';
+  form.style.display = 'block';
+  setTimeout(() => input.focus(), 50);
+}
+function cancelSave() { document.getElementById('saveForm').style.display = 'none'; }
+
+async function confirmSave() {
+  const name = document.getElementById('simNameInput').value.trim();
+  if (!name) return;
+  const data = getCurrentConfig();
+  data.name = name;
+  data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+  const asNew = document.getElementById('saveForm')._asNew;
+  if (!asNew && currentSimId) {
+    await db.collection(SIM_COL).doc(currentSimId).update(data);
+  } else {
+    data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    const ref = await db.collection(SIM_COL).add(data);
+    currentSimId = ref.id;
+  }
+  currentSimName = name;
+  document.getElementById('saveForm').style.display = 'none';
+  renderSaveBtn();
+  loadSimList();
+}
+
+async function loadSimulation(id) {
+  const doc = await db.collection(SIM_COL).doc(id).get();
+  if (!doc.exists) return;
+  currentSimId = id;
+  currentSimName = doc.data().name;
+  applyConfig(doc.data());
+  renderSaveBtn();
+  loadSimList();
+}
+
+async function deleteSimulation(id) {
+  if (!confirm('¿Eliminar esta simulación?')) return;
+  await db.collection(SIM_COL).doc(id).delete();
+  if (currentSimId === id) { currentSimId = null; currentSimName = null; renderSaveBtn(); }
+  loadSimList();
+}
+
 // ── INIT ─────────────────────────────────────────────────────────────────────
 renderCats();
 recalcAll();
+loadSimList();
+renderSaveBtn();
 </script>
 </body>
 </html>
