@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dimensionador de Canchas v1.2 — Torneo Americano de Pádel</title>
+<title>Dimensionador de Canchas v1.3 — Torneo Americano de Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -101,6 +101,19 @@
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
+  .tab-bar { display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+  .tab-btn { background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); font-family: 'Bebas Neue', sans-serif; font-size: 14px; letter-spacing: 2px; padding: 8px 16px; cursor: pointer; transition: color 0.2s, border-color 0.2s; margin-bottom: -1px; }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .fixture-grid { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; overflow-x: auto; }
+  .fixture-court-row { display: flex; align-items: center; height: 46px; margin-bottom: 5px; }
+  .fixture-court-label { width: 90px; flex-shrink: 0; font-size: 11px; color: var(--muted); font-weight: 600; text-align: right; padding-right: 12px; border-right: 1px solid var(--border); white-space: nowrap; }
+  .fixture-court-track { flex: 1; position: relative; height: 38px; background: var(--bg); border-radius: 4px; margin-left: 10px; }
+  .fixture-block { position: absolute; top: 3px; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; padding: 0 4px; cursor: default; }
+  .fixture-axis { display: flex; margin-left: 100px; height: 20px; position: relative; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+  .fixture-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(42,47,62,0.6); pointer-events: none; }
+
   @media (max-width: 800px) {
     .container { grid-template-columns: 1fr; }
     .sidebar { position: static; max-height: none; }
@@ -114,7 +127,7 @@
   <div class="logo-icon">🎾</div>
   <div style="display:flex;align-items:baseline;gap:10px">
     <h1>TORNEO AMERICANO <span>PÁDEL</span></h1>
-    <span class="version-badge">v1.2</span>
+    <span class="version-badge">v1.3</span>
   </div>
   <div class="header-sub">Dimensionador de canchas<br>& planificación operativa</div>
 </header>
@@ -211,6 +224,8 @@ const CAT_COLORS = ['#00e5a0','#ff6b35','#ffd166','#a78bfa','#60a5fa','#f472b6',
 let categories = [{ id:1, name:'Masculino A', pairs:8 }, { id:2, name:'Femenino B', pairs:6 }];
 let nextId = 3;
 let opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true };
+let currentView = 'resumen'; // 'resumen' | 'fixture'
+function switchView(v) { currentView = v; recalcAll(); }
 
 // ── UI HELPERS ──────────────────────────────────────────────────────────────
 function renderCats() {
@@ -352,6 +367,148 @@ const fmt = (totalMin) => {
 };
 const dur = (min) => `${Math.floor(min/60)}h${min%60>0?(min%60)+'m':''}`;
 
+// ── FIXTURE BUILDER ──────────────────────────────────────────────────────────
+function buildFixture(withDays, startMinBase, matchMin, pauseMin) {
+  const slotMin = matchMin + pauseMin;
+  const ppg = +document.getElementById('pairsPerGroup').value || 4;
+  const blocks = [];
+  let courtOffset = 0;
+
+  for (const r of withDays) {
+    const catStart = courtOffset;
+    let t = startMinBase;
+    const courtsPerGroup = Math.floor(ppg / 2);
+
+    if (opts.hasFaseGrupos && r.grupMatches > 0) {
+      const groupSize = ppg;
+      const roundsInGroups = groupSize % 2 === 0 ? groupSize - 1 : (opts.allowBye ? groupSize : groupSize - 1);
+      for (let rnd = 0; rnd < roundsInGroups; rnd++) {
+        for (let g = 0; g < r.groups; g++) {
+          const courtsThisGroup = Math.min(courtsPerGroup, r.minCourts - g * courtsPerGroup);
+          for (let m = 0; m < courtsThisGroup; m++) {
+            blocks.push({
+              court: catStart + g * courtsPerGroup + m,
+              startMin: t, endMin: t + matchMin,
+              label: `Grp ${String.fromCharCode(65+g)} R${rnd+1}`,
+              color: r.color, phase: 'GRUPOS', catName: r.cat.name
+            });
+          }
+        }
+        t += slotMin;
+      }
+    } else if (!opts.hasFaseGrupos && !opts.hasFaseFinal) {
+      // Pure round robin
+      const n = r.effectivePairs;
+      const rounds = n % 2 === 0 ? n - 1 : (opts.allowBye ? n : n - 1);
+      for (let rnd = 0; rnd < rounds; rnd++) {
+        for (let m = 0; m < Math.floor(n / 2); m++) {
+          blocks.push({ court: catStart + m, startMin: t, endMin: t + matchMin,
+            label: `R${rnd+1}`, color: r.color, phase: 'RR', catName: r.cat.name });
+        }
+        t += slotMin;
+      }
+    }
+
+    if (opts.hasFaseFinal && r.adv >= 2) {
+      let size = 1; while (size < r.adv) size *= 2;
+      let matches = size / 2, pr = 0;
+      while (matches >= 1) {
+        const rname = matches === 1 ? 'Final' : matches === 2 ? 'Semis' : `PO R${pr+1}`;
+        for (let m = 0; m < matches; m++) {
+          blocks.push({ court: catStart + m, startMin: t, endMin: t + matchMin,
+            label: rname, color: r.color, phase: 'PLAYOFFS', catName: r.cat.name });
+        }
+        t += slotMin; matches = Math.floor(matches / 2); pr++;
+      }
+    }
+
+    courtOffset += r.minCourts;
+  }
+  return blocks;
+}
+
+function renderFixtureCalendar(blocks, totalCourts, startMinBase, endMinDisplay, withDays) {
+  if (blocks.length === 0) return '<div style="color:var(--muted);padding:20px">Sin partidos para mostrar.</div>';
+
+  const MIN_PX = 3;        // px por minuto
+  const LABEL_W = 90;      // px para etiqueta de cancha
+  const totalDuration = endMinDisplay - startMinBase;
+  const canvasW = totalDuration * MIN_PX;
+
+  // Asignar nombre de cancha por categoría
+  const courtNames = [];
+  let co = 0;
+  for (const r of withDays) {
+    for (let c = 0; c < r.minCourts; c++) {
+      courtNames.push({ label: `Cancha ${co + 1}`, catName: r.cat.name, color: r.color });
+      co++;
+    }
+  }
+
+  // Eje de tiempo (cada 15 min)
+  let axisHtml = `<div class="fixture-axis" style="margin-left:${LABEL_W}px;min-width:${canvasW}px">`;
+  for (let m = startMinBase; m <= endMinDisplay; m += 15) {
+    const x = (m - startMinBase) * MIN_PX;
+    const showLabel = (m - startMinBase) % 30 === 0;
+    axisHtml += `<span style="position:absolute;left:${x}px;font-size:10px;color:var(--muted);transform:translateX(-50%);white-space:nowrap">
+      ${showLabel ? fmt(m) : '·'}
+    </span>`;
+  }
+  axisHtml += '</div>';
+
+  // Filas por cancha
+  let rowsHtml = '';
+  for (let c = 0; c < totalCourts; c++) {
+    const cn = courtNames[c] || { label: `Cancha ${c+1}`, color: '#555', catName: '' };
+    const courtBlocks = blocks.filter(b => b.court === c);
+
+    // Grid lines
+    let gridLines = '';
+    for (let m = startMinBase; m <= endMinDisplay; m += 15) {
+      const x = (m - startMinBase) * MIN_PX;
+      gridLines += `<div class="fixture-gridline" style="left:${x}px;opacity:${(m-startMinBase)%30===0?0.5:0.2}"></div>`;
+    }
+
+    // Bloques de partido
+    let blockHtml = '';
+    for (const b of courtBlocks) {
+      const x = (b.startMin - startMinBase) * MIN_PX;
+      const w = (b.endMin - b.startMin) * MIN_PX;
+      const isPlayoff = b.phase === 'PLAYOFFS';
+      const opacity = isPlayoff ? '1' : '0.72';
+      blockHtml += `
+        <div class="fixture-block" style="left:${x}px;width:${w - 2}px;height:32px;background:${b.color};opacity:${opacity}"
+          title="${b.catName} · ${b.phase} · ${fmt(b.startMin)}–${fmt(b.endMin)}">
+          ${w > 35 ? `<span style="font-size:9px;font-weight:700;color:#000;white-space:nowrap;overflow:hidden;max-width:100%;text-align:center">${b.label}</span>` : ''}
+        </div>`;
+    }
+
+    rowsHtml += `
+      <div class="fixture-court-row">
+        <div class="fixture-court-label" style="border-right-color:${cn.color}30">
+          <span style="color:${cn.color};font-size:10px;display:block">${cn.catName.substring(0,12)}</span>
+          ${cn.label}
+        </div>
+        <div class="fixture-court-track" style="min-width:${canvasW}px">
+          ${gridLines}${blockHtml}
+        </div>
+      </div>`;
+  }
+
+  // Leyenda
+  const cats = [...new Map(blocks.map(b => [b.catName, b.color])).entries()];
+  const legendHtml = `
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+      ${cats.map(([name, color]) => `
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)">
+          <div style="width:10px;height:10px;border-radius:2px;background:${color}"></div>${name}
+        </div>`).join('')}
+      <div style="margin-left:auto;font-size:10px;color:var(--muted)">Grupos = 72% · Playoffs = 100% opacidad</div>
+    </div>`;
+
+  return `<div class="fixture-grid">${axisHtml}${rowsHtml}${legendHtml}</div>`;
+}
+
 // ── RENDER ───────────────────────────────────────────────────────────────────
 function recalcAll() {
   const numDays = Math.max(1, +document.getElementById('numDays').value || 1);
@@ -433,10 +590,32 @@ function recalcAll() {
     }
   });
 
+  const tabBar = `
+    <div class="tab-bar">
+      <button class="tab-btn ${currentView==='resumen'?'active':''}" onclick="switchView('resumen')">📊 RESUMEN</button>
+      <button class="tab-btn ${currentView==='fixture'?'active':''}" onclick="switchView('fixture')">🗓️ FIXTURE</button>
+    </div>`;
+
+  const warningsHtml = warnings.length ? `<div class="warnings">${warnings.map(w =>
+    `<div class="warn-item ${w.t}"><span style="flex-shrink:0">${w.t==='info'?'⚠️':'🚨'}</span><span>${w.msg}</span></div>`).join('')}</div>` : '';
+
   const main = document.getElementById('mainContent');
-  main.innerHTML = `
-    ${warnings.length ? `<div class="warnings">${warnings.map(w =>
-      `<div class="warn-item ${w.t}"><span style="flex-shrink:0">${w.t==='info'?'⚠️':'🚨'}</span><span>${w.msg}</span></div>`).join('')}</div>` : ''}
+
+  if (currentView === 'fixture') {
+    const fixtureBlocks = buildFixture(withDays, startMin, matchMin, pauseMin);
+    const maxBlockEnd = fixtureBlocks.length ? Math.max(...fixtureBlocks.map(b => b.endMin)) : startMin + minsPerDay;
+    const endDisplay = Math.max(maxBlockEnd, startMin + minsPerDay);
+    main.innerHTML = tabBar + warningsHtml + `
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:11px;display:flex;align-items:center;gap:8px;">
+        SIMULADOR DE FIXTURE <div style="flex:1;height:1px;background:var(--border)"></div>
+        <span style="font-size:11px;color:var(--muted);font-family:'DM Sans',sans-serif;letter-spacing:0;font-weight:400">${fmt(startMin)} → ${fmt(endDisplay)} · ${totalCourtsIdeal} canchas</span>
+      </div>
+      ${renderFixtureCalendar(fixtureBlocks, totalCourtsIdeal, startMin, endDisplay, withDays)}`;
+    return;
+  }
+
+  main.innerHTML = tabBar + `
+    ${warningsHtml}
 
     <div class="kpi-grid">
       <div class="kpi-card hi"><div class="kpi-val">${totalCourtsIdeal}</div><div class="kpi-label">Canchas mínimas necesarias${maxCourts > 0 && maxCourts < totalCourtsIdeal ? ` <span style="color:var(--danger);font-size:9px">(tienes ${maxCourts})</span>` : maxCourts >= totalCourtsIdeal && maxCourts > 0 ? ` <span style="color:var(--accent);font-size:9px">(tienes ${maxCourts} ✅)</span>` : ''}</div></div>
