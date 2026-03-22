@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Campeonatos v1.4 — Pádel</title>
+<title>Simulador Campeonatos v1.5 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -141,7 +141,7 @@
   <div class="logo-icon">🎾</div>
   <div style="display:flex;align-items:baseline;gap:10px">
     <h1>SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v1.4</span>
+    <span class="version-badge">v1.5</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -185,6 +185,10 @@
     <div class="toggle-row" onclick="toggleOpt('hasFaseFinal')">
       <span data-tip="Cuadro eliminatorio tras fase de grupos">Fase final (playoffs)</span>
       <div class="toggle on" id="tog_hasFaseFinal"></div>
+    </div>
+    <div class="toggle-row" id="copasToggleRow" onclick="toggleOpt('hasCopas')" style="display:none">
+      <span data-tip="Los no clasificados juegan su propio bracket de consolación (Copa de Plata)">🥇 Copa de Oro / 🥈 Plata</span>
+      <div class="toggle" id="tog_hasCopas"></div>
     </div>
     <div class="toggle-row" onclick="toggleOpt('allowBye')">
       <span data-tip="Pareja sin rival en una ronda (nº impar de parejas)">Permitir pareja libre (bye)</span>
@@ -252,7 +256,7 @@
 const CAT_COLORS = ['#00e5a0','#ff6b35','#ffd166','#a78bfa','#60a5fa','#f472b6','#34d399','#fb923c'];
 let categories = [{ id:1, name:'Masculino A', pairs:8 }, { id:2, name:'Femenino B', pairs:6 }];
 let nextId = 3;
-let opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true };
+let opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false };
 let currentView = 'resumen'; // 'resumen' | 'fixture'
 function switchView(v) { currentView = v; recalcAll(); }
 
@@ -286,6 +290,10 @@ function toggleOpt(key) {
   opts[key] = !opts[key];
   document.getElementById('tog_' + key).className = 'toggle' + (opts[key] ? ' on' : '');
   if (key === 'hasFaseGrupos') document.getElementById('gruposOptions').style.display = opts[key] ? 'block' : 'none';
+  // Copa Oro/Plata solo aplica cuando hay grupos Y fase final
+  const canHaveCopas = opts.hasFaseGrupos && opts.hasFaseFinal;
+  document.getElementById('copasToggleRow').style.display = canHaveCopas ? 'flex' : 'none';
+  if (!canHaveCopas) { opts.hasCopas = false; document.getElementById('tog_hasCopas').className = 'toggle'; }
   recalcAll();
 }
 
@@ -330,17 +338,35 @@ function calcCategory(cat) {
     grupMatches = rr(effectivePairs); grupRounds = effectivePairs - 1; groups = 1;
   }
 
-  const totalMatches = grupMatches + finalMatches;
+  // Copa de Plata: los NO clasificados juegan su propio bracket
+  let silverMatches = 0, silverRounds = 0, silverCourts = 0;
+  if (opts.hasCopas && opts.hasFaseGrupos && opts.hasFaseFinal && groups > 0) {
+    const silverTeams = groups * Math.max(0, ppg - apg);
+    if (silverTeams >= 2) {
+      const sp = calcFinalPhase(silverTeams);
+      silverMatches = sp.matches; silverRounds = sp.rounds;
+      silverCourts = sp.rounds > 0 ? Math.ceil(sp.matches / sp.rounds) : 0;
+    }
+  }
+
+  const totalMatches = grupMatches + finalMatches + silverMatches;
 
   // Courts needed: max simultaneous matches in any round
   const courtsGroup = opts.hasFaseGrupos ? groups * Math.floor(ppg / 2) : Math.ceil(effectivePairs / 2);
   const fp2 = (opts.hasFaseFinal && adv >= 2) ? calcFinalPhase(adv) : { matches: 0, rounds: 1 };
   const courtsFinal = fp2.rounds > 0 ? Math.ceil(fp2.matches / fp2.rounds) : 0;
-  const minCourts = Math.max(courtsGroup, courtsFinal, 1);
+  // Durante la fase final, Oro y Plata corren en paralelo → sumamos canchas
+  const minCourts = Math.max(courtsGroup, courtsFinal + silverCourts, 1);
 
-  const totalMinutes = Math.ceil(totalMatches / minCourts) * slotMin;
+  // Timing: grupos secuencial, luego Oro y Plata en paralelo
+  const groupSlots = courtsGroup > 0 ? Math.ceil(grupMatches / courtsGroup) : 0;
+  const goldSlots  = courtsFinal > 0 ? Math.ceil(finalMatches / courtsFinal) : 0;
+  const platSlots  = silverCourts > 0 ? Math.ceil(silverMatches / silverCourts) : 0;
+  const totalMinutes = (groupSlots + Math.max(goldSlots, platSlots)) * slotMin;
 
-  return { cat, effectivePairs, totalMatches, grupMatches, grupRounds, finalMatches, finalRounds, groups, adv, minCourts, totalMinutes, slotMin };
+  return { cat, effectivePairs, totalMatches, grupMatches, grupRounds, finalMatches, finalRounds,
+           silverMatches, silverRounds, silverCourts, courtsFinal,
+           groups, adv, minCourts, totalMinutes, slotMin };
 }
 
 // ── MULTI-DAY DISTRIBUTION ──────────────────────────────────────────────────
@@ -439,16 +465,39 @@ function buildFixture(withDays, startMinBase, matchMin, pauseMin) {
     }
 
     if (opts.hasFaseFinal && r.adv >= 2) {
+      const goldCourtStart = catStart;
+      const silverCourtStart = catStart + r.courtsFinal;
+      let goldT = t, silverT = t;
+
+      // Copa de Oro
       let size = 1; while (size < r.adv) size *= 2;
       let matches = size / 2, pr = 0;
       while (matches >= 1) {
-        const rname = matches === 1 ? 'Final' : matches === 2 ? 'Semis' : `PO R${pr+1}`;
+        const rname = matches === 1 ? '🥇 Final' : matches === 2 ? '🥇 Semis' : `🥇 R${pr+1}`;
         for (let m = 0; m < matches; m++) {
-          blocks.push({ court: catStart + m, startMin: t, endMin: t + matchMin,
+          blocks.push({ court: goldCourtStart + m, startMin: goldT, endMin: goldT + matchMin,
             label: rname, color: r.color, phase: 'PLAYOFFS', catName: r.cat.name });
         }
-        t += slotMin; matches = Math.floor(matches / 2); pr++;
+        goldT += slotMin; matches = Math.floor(matches / 2); pr++;
       }
+
+      // Copa de Plata (si está habilitada)
+      if (opts.hasCopas && r.silverMatches > 0) {
+        const apg = +document.getElementById('advancePerGroup').value || 2;
+        const silverTeams = r.groups * Math.max(0, ppg - apg);
+        let sSize = 1; while (sSize < silverTeams) sSize *= 2;
+        let sMatches = sSize / 2, sp = 0;
+        while (sMatches >= 1) {
+          const rname = sMatches === 1 ? '🥈 Final' : sMatches === 2 ? '🥈 Semis' : `🥈 R${sp+1}`;
+          for (let m = 0; m < sMatches; m++) {
+            blocks.push({ court: silverCourtStart + m, startMin: silverT, endMin: silverT + matchMin,
+              label: rname, color: r.color, phase: 'PLATA', catName: r.cat.name });
+          }
+          silverT += slotMin; sMatches = Math.floor(sMatches / 2); sp++;
+        }
+      }
+
+      t = Math.max(goldT, silverT);
     }
 
     courtOffset += r.minCourts;
@@ -503,8 +552,7 @@ function renderFixtureCalendar(blocks, totalCourts, startMinBase, endMinDisplay,
     for (const b of courtBlocks) {
       const x = (b.startMin - startMinBase) * MIN_PX;
       const w = (b.endMin - b.startMin) * MIN_PX;
-      const isPlayoff = b.phase === 'PLAYOFFS';
-      const opacity = isPlayoff ? '1' : '0.72';
+      const opacity = b.phase === 'PLAYOFFS' ? '1' : b.phase === 'PLATA' ? '0.55' : '0.72';
       blockHtml += `
         <div class="fixture-block" style="left:${x}px;width:${w - 2}px;height:32px;background:${b.color};opacity:${opacity}"
           title="${b.catName} · ${b.phase} · ${fmt(b.startMin)}–${fmt(b.endMin)}">
@@ -532,7 +580,7 @@ function renderFixtureCalendar(blocks, totalCourts, startMinBase, endMinDisplay,
         <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)">
           <div style="width:10px;height:10px;border-radius:2px;background:${color}"></div>${name}
         </div>`).join('')}
-      <div style="margin-left:auto;font-size:10px;color:var(--muted)">Grupos = 72% · Playoffs = 100% opacidad</div>
+      <div style="margin-left:auto;font-size:10px;color:var(--muted)">Grupos 72% · 🥇 Oro 100% · 🥈 Plata 55%</div>
     </div>`;
 
   return `<div class="fixture-grid">${axisHtml}${rowsHtml}${legendHtml}</div>`;
@@ -680,9 +728,10 @@ function recalcAll() {
           </div>
           ${advTxt ? `<div style="font-size:11px;color:var(--muted);margin-top:6px">${advTxt}</div>` : ''}
           ${opts.hasFaseGrupos && opts.hasFaseFinal ? `
-          <div style="font-size:11px;color:var(--muted);margin-top:5px;display:flex;gap:12px">
+          <div style="font-size:11px;color:var(--muted);margin-top:5px;display:flex;gap:12px;flex-wrap:wrap">
             <span>🔵 Grupos: ${r.grupMatches} partidos</span>
-            <span>🏆 Playoffs: ${r.finalMatches} partidos</span>
+            <span>🥇 Copa Oro: ${r.finalMatches} partidos</span>
+            ${opts.hasCopas && r.silverMatches > 0 ? `<span>🥈 Copa Plata: ${r.silverMatches} partidos · ${r.silverCourts} cancha${r.silverCourts!==1?'s':''}</span>` : ''}
           </div>` : ''}
           ${numDays > 1 ? `
           <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
@@ -831,10 +880,12 @@ function applyConfig(data) {
   document.getElementById('pairsPerGroup').value = data.pairsPerGroup;
   document.getElementById('advancePerGroup').value = data.advancePerGroup;
 
-  ['hasFaseGrupos','hasFaseFinal','allowBye'].forEach(k => {
+  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas'].forEach(k => {
     document.getElementById('tog_' + k).className = 'toggle' + (opts[k] ? ' on' : '');
   });
   document.getElementById('gruposOptions').style.display = opts.hasFaseGrupos ? 'block' : 'none';
+  const canHaveCopas = opts.hasFaseGrupos && opts.hasFaseFinal;
+  document.getElementById('copasToggleRow').style.display = canHaveCopas ? 'flex' : 'none';
   renderCats();
   recalcAll();
 }
