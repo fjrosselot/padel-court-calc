@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Campeonatos v1.8 — Pádel</title>
+<title>Simulador Campeonatos v1.9 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -141,7 +141,7 @@
   <div class="logo-icon">🎾</div>
   <div style="display:flex;align-items:baseline;gap:10px">
     <h1>SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v1.8</span>
+    <span class="version-badge">v1.9</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -981,11 +981,36 @@ async function loadSimList() {
   }
 }
 
+function newSimulation() {
+  if (!confirm('¿Comenzar una simulación en blanco? Se perderán los cambios no guardados.')) return;
+  currentSimId = null;
+  currentSimName = null;
+  categories = [{ id:1, name:'Masculino A', pairs:8 }, { id:2, name:'Femenino B', pairs:6 }];
+  nextId = 3;
+  opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false };
+  document.getElementById('matchDuration').value = 30; document.getElementById('matchDurationVal').textContent = 30;
+  document.getElementById('pauseDuration').value = 5;  document.getElementById('pauseDurationVal').textContent = 5;
+  document.getElementById('startTime').value = 1080;   document.getElementById('startTimeVal').textContent = '18:00';
+  document.getElementById('hoursPerDay').value = 2;    document.getElementById('hoursPerDayVal').textContent = '2h';
+  document.getElementById('numDays').value = 1;
+  document.getElementById('maxCourts').value = 0;
+  document.getElementById('pairsPerGroup').value = 4;
+  document.getElementById('advancePerGroup').value = 2;
+  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas','hasThirdPlace'].forEach(k => {
+    document.getElementById('tog_' + k).className = 'toggle' + (opts[k] ? ' on' : '');
+  });
+  document.getElementById('gruposOptions').style.display = 'block';
+  document.getElementById('copasToggleRow').style.display = 'flex';
+  document.getElementById('thirdPlaceToggleRow').style.display = 'flex';
+  renderCats(); recalcAll(); renderSaveBtn(); loadSimList();
+}
+
 function renderSaveBtn() {
   const c = document.getElementById('saveBtnContainer');
   c.innerHTML = currentSimId
     ? `<button class="save-sim-btn" onclick="showSaveForm(false)">💾 Actualizar "${currentSimName}"</button>
-       <button class="save-sim-btn-sec" onclick="showSaveForm(true)">＋ Guardar como nuevo</button>`
+       <button class="save-sim-btn-sec" onclick="showSaveForm(true)">＋ Guardar como nuevo</button>
+       <button class="save-sim-btn-sec" onclick="newSimulation()" style="margin-top:4px">✕ Nueva simulación</button>`
     : `<button class="save-sim-btn" onclick="showSaveForm(false)">💾 Guardar simulación</button>`;
 }
 
