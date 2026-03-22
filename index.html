@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Campeonatos v1.9 — Pádel</title>
+<title>Simulador Campeonatos v2.0 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -141,7 +141,7 @@
   <div class="logo-icon">🎾</div>
   <div style="display:flex;align-items:baseline;gap:10px">
     <h1>SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v1.9</span>
+    <span class="version-badge">v2.0</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -229,7 +229,7 @@
     <div class="field">
       <label>Horas disponibles por día</label>
       <div class="slider-row">
-        <input type="range" id="hoursPerDay" value="2" min="1" max="3" step="0.5"
+        <input type="range" id="hoursPerDay" value="2" min="1" max="4" step="0.5"
           oninput="const h=+this.value; document.getElementById('hoursPerDayVal').textContent=Math.floor(h)+'h'+(h%1?'30':''); recalcAll()">
         <span class="slider-val" id="hoursPerDayVal" style="font-size:16px;min-width:46px">2h</span>
       </div>
