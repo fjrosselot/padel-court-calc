@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Campeonatos v3.1 — Pádel</title>
+<title>Simulador Campeonatos v3.2 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -57,8 +57,8 @@
   .stepper input[type="number"] { text-align: center; padding: 5px 2px; min-width: 0; flex: 1; }
 
   .container { display: grid; grid-template-columns: 1fr; min-height: calc(100vh - 66px); width: 100%; }
-  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 16px; overflow-y: auto; overflow-x: hidden; }
-  .main { padding: 12px; }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 16px; overflow-y: auto; overflow-x: hidden; min-width: 0; }
+  .main { padding: 12px; min-width: 0; overflow-x: hidden; }
 
   .section { margin-bottom: 16px; }
   .section-title { font-family: 'Bebas Neue', sans-serif; font-size: 13px; letter-spacing: 2px; color: var(--accent); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
@@ -103,10 +103,10 @@
   .cb-name { font-weight: 600; font-size: 13px; flex: 1; }
   .cb-courts { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--accent); }
   .cb-courts small { font-size: 11px; color: var(--muted); font-family: 'DM Sans', sans-serif; font-weight: 400; }
-  .cb-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 5px; }
-  .cb-stat { background: var(--bg); border-radius: 5px; padding: 6px; text-align: center; }
+  .cb-stats { display: grid; grid-template-columns: repeat(2,1fr); gap: 5px; } /* 2 col en móvil */
+  .cb-stat { background: var(--bg); border-radius: 5px; padding: 6px; text-align: center; min-width: 0; }
   .cb-stat-val { font-weight: 600; font-size: 14px; }
-  .cb-stat-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; margin-top: 1px; }
+  .cb-stat-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .tl-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 16px; overflow-x: auto; }
   .tl-day-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,229,160,0.1); border: 1px solid rgba(0,229,160,0.3); border-radius: 6px; padding: 4px 10px; font-size: 12px; color: var(--accent); font-weight: 600; margin-bottom: 11px; }
@@ -178,6 +178,8 @@
     .cb-item { padding: 12px 14px; }
     .cb-stat { padding: 6px; }
     .cb-stat-val { font-size: 14px; }
+    .cb-stats { grid-template-columns: repeat(4,1fr); }
+    .main { overflow-x: visible; }
     /* Restaurar tooltips en desktop */
     [data-tip]::after { display: block; content: attr(data-tip); position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); background: #1e2330; color: #fff; padding: 5px 8px; border-radius: 5px; font-size: 11px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 999; border: 1px solid var(--border); }
     [data-tip]:hover::after { opacity: 1; }
@@ -190,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v3.1</span>
+    <span class="version-badge">v3.2</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
