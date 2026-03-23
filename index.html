@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Campeonatos v2.2 — Pádel</title>
+<title>Simulador Campeonatos v2.3 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -141,7 +141,7 @@
   <div class="logo-icon">🎾</div>
   <div style="display:flex;align-items:baseline;gap:10px">
     <h1>SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v2.2</span>
+    <span class="version-badge">v2.3</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -567,11 +567,12 @@ function renderFixtureCalendar(blocks, totalCourts, startMinBase, endMinDisplay,
   const totalDuration = endMinDisplay - startMinBase;
   const canvasW = totalDuration * MIN_PX;
 
-  // Asignar nombre de cancha por categoría
+  // Asignar nombre de cancha por categoría (usando canchas activas, no ideales)
   const courtNames = [];
   let co = 0;
   for (const r of withDays) {
-    for (let c = 0; c < r.minCourts; c++) {
+    const cCount = r.activeCourts || r.minCourts;
+    for (let c = 0; c < cCount; c++) {
       courtNames.push({ label: `Cancha ${co + 1}`, catName: r.cat.name, color: r.color });
       co++;
     }
@@ -794,12 +795,20 @@ function recalcAll() {
     const endDisplay = Math.max(maxBlockEnd, startMin + minsPerDay);
 
     if (currentView === 'fixture') {
+      const activeTotalCourts = withDays.reduce((s,r)=>s+(r.activeCourts||r.minCourts),0);
+      const overflowBlocks = fixtureBlocks.filter(b => b.startMin >= startMin + minsPerDay);
+      const overflowHtml = overflowBlocks.length > 0
+        ? `<div style="margin-bottom:10px;padding:8px 12px;background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.3);border-radius:7px;font-size:12px;color:var(--danger)">
+            🚨 <b>${overflowBlocks.length} partido${overflowBlocks.length!==1?'s':''}</b> quedan fuera del horario disponible (${fmt(startMin)}–${fmt(startMin+minsPerDay)}).
+            Agrega más horas al día, más días, o más canchas.
+          </div>` : '';
       main.innerHTML = tabBar + warningsHtml + `
         <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:11px;display:flex;align-items:center;gap:8px;">
           SIMULADOR DE FIXTURE <div style="flex:1;height:1px;background:var(--border)"></div>
-          <span style="font-size:11px;color:var(--muted);font-family:'DM Sans',sans-serif;letter-spacing:0;font-weight:400">${fmt(startMin)} → ${fmt(endDisplay)} · ${withDays.reduce((s,r)=>s+(r.activeCourts||r.minCourts),0)} canchas${maxCourts > 0 && maxCourts < totalCourtsIdeal ? ` <span style="color:#ffbe00">(limitado a ${maxCourts})</span>` : ''}</span>
+          <span style="font-size:11px;color:var(--muted);font-family:'DM Sans',sans-serif;letter-spacing:0;font-weight:400">${fmt(startMin)} → ${fmt(endDisplay)} · ${activeTotalCourts} canchas${maxCourts > 0 && maxCourts < totalCourtsIdeal ? ` <span style="color:#ffbe00">(limitado a ${maxCourts})</span>` : ''}</span>
         </div>
-        ${renderFixtureCalendar(fixtureBlocks, withDays.reduce((s,r)=>s+(r.activeCourts||r.minCourts),0), startMin, endDisplay, withDays)}`;
+        ${overflowHtml}
+        ${renderFixtureCalendar(fixtureBlocks, activeTotalCourts, startMin, endDisplay, withDays)}`;
     } else {
       main.innerHTML = tabBar + warningsHtml + `
         <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:11px;display:flex;align-items:center;gap:8px;">
