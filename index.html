@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v4.4</span>
+    <span class="version-badge">v4.5</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -1054,9 +1054,12 @@ function renderFixtureCalendar(blocks, totalCourts, startMinBase, endMinDisplay,
     for (const b of courtBlocks) {
       const x = (b.startMin - startMinBase) * MIN_PX;
       const w = (b.endMin - b.startMin) * MIN_PX;
-      const opacity = b.phase === 'PLAYOFFS' ? '1' : b.phase === '3RD' ? '0.85' : b.phase === 'PLATA' ? '0.55' : '0.72';
+      const border = b.phase === 'PLAYOFFS' ? '2px solid #FFD700'
+                   : b.phase === 'PLATA'    ? '2px solid #C0C0C0'
+                   : b.phase === '3RD'      ? '2px solid #CD7F32'
+                   : 'none';
       blockHtml += `
-        <div class="fixture-block" style="left:${x}px;width:${w - 2}px;height:32px;background:${b.color};opacity:${opacity}"
+        <div class="fixture-block" style="left:${x}px;width:${w - 2}px;height:32px;background:${b.color};border:${border};box-sizing:border-box"
           title="${b.catName} · ${b.phase} · ${fmt(b.startMin)}–${fmt(b.endMin)}">
           ${w > 55 ? `<span style="font-size:8px;color:#0006;font-weight:600;line-height:1">${b.id}</span><span style="font-size:9px;font-weight:700;color:#000;white-space:nowrap;overflow:hidden;max-width:100%;text-align:center;line-height:1.2">${b.label}</span>` : w > 28 ? `<span style="font-size:9px;font-weight:700;color:#000;white-space:nowrap;overflow:hidden">${b.label}</span>` : ''}
         </div>`;
@@ -1086,9 +1089,9 @@ function renderFixtureCalendar(blocks, totalCourts, startMinBase, endMinDisplay,
         const phases = new Set(blocks.map(b => b.phase));
         const labels = [];
         if (phases.has('GRUPOS')) labels.push('Grupos');
-        if (phases.has('PLAYOFFS')) labels.push('🥇 Copa Oro');
-        if (phases.has('3RD')) labels.push('🥉 3° lugar');
-        if (phases.has('PLATA')) labels.push('🥈 Copa Plata');
+        if (phases.has('PLAYOFFS')) labels.push('<span style="border:1.5px solid #FFD700;border-radius:3px;padding:0 4px">🥇 Copa Oro</span>');
+        if (phases.has('3RD')) labels.push('<span style="border:1.5px solid #CD7F32;border-radius:3px;padding:0 4px">🥉 3° lugar</span>');
+        if (phases.has('PLATA')) labels.push('<span style="border:1.5px solid #C0C0C0;border-radius:3px;padding:0 4px">🥈 Copa Plata</span>');
         if (phases.has('RR')) labels.push('Round Robin');
         return labels.length > 1
           ? `<div style="margin-left:auto;font-size:10px;color:var(--muted)">${labels.join(' · ')}</div>`
