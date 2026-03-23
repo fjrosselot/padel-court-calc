@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v4.2</span>
+    <span class="version-badge">v4.3</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -1426,14 +1426,16 @@ function renderDayTimeline(withDays, dayIdx, startMin, dayDuration, minsPerDay) 
         ${withDays.map(r => {
           const day = r.days[dayIdx];
           if (!day || day.matches === 0) return '';
-          const barW = Math.max(4, (day.minutes / 60) * HOUR_PX);
+          // En modo Fixture Compacto todas las categorías comparten el mismo período global
+          const barMins = opts.greedySchedule ? dayDuration : day.minutes;
+          const barW = Math.max(4, (barMins / 60) * HOUR_PX);
           const isPlayoff = day.phase === 'PLAYOFFS';
           return `
           <div style="display:flex;align-items:center;margin-bottom:5px">
             <div style="width:120px;flex-shrink:0;font-size:11px;color:var(--muted);text-align:right;padding-right:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.cat.name}</div>
             <div style="flex:1;height:24px;position:relative;background:var(--bg);border-radius:4px">
               <div style="position:absolute;left:0;top:0;width:${barW}px;max-width:100%;height:100%;background:${r.color};opacity:${isPlayoff?'1':'0.7'};border-radius:3px;display:flex;align-items:center;padding:0 8px;font-size:10px;color:#000;font-weight:700;overflow:hidden;white-space:nowrap;gap:5px">
-                ${barW > 60 ? `<span>${day.phase}</span><span style="opacity:0.7">·</span><span>${day.matches} partidos</span><span style="opacity:0.7">·</span><span>${dur(day.minutes)}</span>` : ''}
+                ${barW > 60 ? `<span>${day.phase}</span><span style="opacity:0.7">·</span><span>${day.matches} partidos</span><span style="opacity:0.7">·</span><span>${dur(barMins)}</span>` : ''}
               </div>
             </div>
           </div>`;
