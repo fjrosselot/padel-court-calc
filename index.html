@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Campeonatos v2.4 — Pádel</title>
+<title>Simulador Campeonatos v2.5 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -141,7 +141,7 @@
   <div class="logo-icon">🎾</div>
   <div style="display:flex;align-items:baseline;gap:10px">
     <h1>SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v2.4</span>
+    <span class="version-badge">v2.5</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -197,6 +197,11 @@
     <div class="toggle-row" onclick="toggleOpt('allowBye')">
       <span data-tip="Pareja sin rival en una ronda (nº impar de parejas)">Permitir pareja libre (bye)</span>
       <div class="toggle on" id="tog_allowBye"></div>
+    </div>
+    <div style="height:1px;background:var(--border);margin:8px 0"></div>
+    <div class="toggle-row" onclick="toggleOpt('greedySchedule')">
+      <span data-tip="Llena cada cancha tan pronto queda libre, mezclando rondas de distintos grupos. Reduce el tiempo total pero distintos grupos pueden estar en rondas distintas simultáneamente.">Fixture: canchas al máximo</span>
+      <div class="toggle" id="tog_greedySchedule"></div>
     </div>
   </div>
 
@@ -260,7 +265,7 @@
 const CAT_COLORS = ['#00e5a0','#ff6b35','#ffd166','#a78bfa','#60a5fa','#f472b6','#34d399','#fb923c'];
 let categories = [{ id:1, name:'Masculino A', pairs:8 }, { id:2, name:'Femenino B', pairs:6 }];
 let nextId = 3;
-let opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false };
+let opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false, greedySchedule:false };
 let currentView = 'resumen'; // 'resumen' | 'fixture'
 function switchView(v) { currentView = v; recalcAll(); }
 
@@ -455,25 +460,57 @@ function buildFixture(withDays, startMinBase, matchMin, pauseMin) {
       const groupSize = ppg;
       const roundsInGroups = groupSize % 2 === 0 ? groupSize - 1 : (opts.allowBye ? groupSize : groupSize - 1);
       const matchesPerRound = r.groups * courtsPerGroup;
-      for (let rnd = 0; rnd < roundsInGroups; rnd++) {
-        // Serializar partidos de la ronda si hay menos canchas que partidos simultáneos ideales
-        let matchIdx = 0;
-        for (let g = 0; g < r.groups; g++) {
-          for (let m = 0; m < courtsPerGroup; m++) {
-            const slot = Math.floor(matchIdx / activeCourts);
-            const court = catStart + (matchIdx % activeCourts);
-            blocks.push({
-              id: nextId(),
-              court: court,
-              startMin: t + slot * slotMin,
-              endMin: t + slot * slotMin + matchMin,
-              label: `Grp ${String.fromCharCode(65+g)} R${rnd+1}`,
-              color: r.color, phase: 'GRUPOS', catName: r.cat.name
-            });
-            matchIdx++;
+
+      if (opts.greedySchedule && r.groups > 1) {
+        // ── MODO GREEDY: llena canchas tan pronto quedan libres ──
+        // Cada grupo es independiente: puede empezar su R2 sin esperar que otros grupos terminen R1
+        const courtFreeAt = Array(activeCourts).fill(t);
+        const groupRoundReady = Array(r.groups).fill(t);
+        const groupRoundMatchesLeft = Array(r.groups).fill(courtsPerGroup);
+        const groupCurrentRound = Array(r.groups).fill(0);
+        const groupRoundLastEnd = Array(r.groups).fill(t);
+        let remaining = r.grupMatches;
+        while (remaining > 0) {
+          let bestStart = Infinity, bestCourt = -1, bestGroup = -1;
+          for (let g = 0; g < r.groups; g++) {
+            if (groupCurrentRound[g] >= roundsInGroups || groupRoundMatchesLeft[g] <= 0) continue;
+            for (let c = 0; c < activeCourts; c++) {
+              const canStart = Math.max(courtFreeAt[c], groupRoundReady[g]);
+              if (canStart < bestStart) { bestStart = canStart; bestCourt = c; bestGroup = g; }
+            }
+          }
+          if (bestCourt === -1) break;
+          const g = bestGroup, c = bestCourt, rnd = groupCurrentRound[g];
+          blocks.push({ id: nextId(), court: catStart + c, startMin: bestStart, endMin: bestStart + matchMin,
+            label: `Grp ${String.fromCharCode(65+g)} R${rnd+1}`, color: r.color, phase: 'GRUPOS', catName: r.cat.name });
+          courtFreeAt[c] = bestStart + slotMin;
+          groupRoundMatchesLeft[g]--;
+          groupRoundLastEnd[g] = Math.max(groupRoundLastEnd[g], bestStart + slotMin);
+          remaining--;
+          if (groupRoundMatchesLeft[g] === 0) {
+            groupCurrentRound[g]++;
+            if (groupCurrentRound[g] < roundsInGroups) {
+              groupRoundMatchesLeft[g] = courtsPerGroup;
+              groupRoundReady[g] = groupRoundLastEnd[g];
+            }
           }
         }
-        t += Math.ceil(matchesPerRound / activeCourts) * slotMin;
+        t = Math.max(...courtFreeAt);
+      } else {
+        // ── MODO RONDAS: todos los grupos completan la misma ronda antes de avanzar ──
+        for (let rnd = 0; rnd < roundsInGroups; rnd++) {
+          let matchIdx = 0;
+          for (let g = 0; g < r.groups; g++) {
+            for (let m = 0; m < courtsPerGroup; m++) {
+              const slot = Math.floor(matchIdx / activeCourts);
+              const court = catStart + (matchIdx % activeCourts);
+              blocks.push({ id: nextId(), court, startMin: t + slot * slotMin, endMin: t + slot * slotMin + matchMin,
+                label: `Grp ${String.fromCharCode(65+g)} R${rnd+1}`, color: r.color, phase: 'GRUPOS', catName: r.cat.name });
+              matchIdx++;
+            }
+          }
+          t += Math.ceil(matchesPerRound / activeCourts) * slotMin;
+        }
       }
     } else if (!opts.hasFaseGrupos && !opts.hasFaseFinal) {
       // Pure round robin
@@ -1019,7 +1056,7 @@ function applyConfig(data) {
   document.getElementById('pairsPerGroup').value = data.pairsPerGroup;
   document.getElementById('advancePerGroup').value = data.advancePerGroup;
 
-  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas','hasThirdPlace'].forEach(k => {
+  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas','hasThirdPlace','greedySchedule'].forEach(k => {
     document.getElementById('tog_' + k).className = 'toggle' + (opts[k] ? ' on' : '');
   });
   document.getElementById('gruposOptions').style.display = opts.hasFaseGrupos ? 'block' : 'none';
@@ -1061,7 +1098,7 @@ function newSimulation() {
   currentSimName = null;
   categories = [{ id:1, name:'Masculino A', pairs:8 }, { id:2, name:'Femenino B', pairs:6 }];
   nextId = 3;
-  opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false };
+  opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false, greedySchedule:false };
   document.getElementById('matchDuration').value = 30; document.getElementById('matchDurationVal').textContent = 30;
   document.getElementById('pauseDuration').value = 5;  document.getElementById('pauseDurationVal').textContent = 5;
   document.getElementById('startTime').value = 1080;   document.getElementById('startTimeVal').textContent = '18:00';
@@ -1070,7 +1107,7 @@ function newSimulation() {
   document.getElementById('maxCourts').value = 0;
   document.getElementById('pairsPerGroup').value = 4;
   document.getElementById('advancePerGroup').value = 2;
-  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas','hasThirdPlace'].forEach(k => {
+  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas','hasThirdPlace','greedySchedule'].forEach(k => {
     document.getElementById('tog_' + k).className = 'toggle' + (opts[k] ? ' on' : '');
   });
   document.getElementById('gruposOptions').style.display = 'block';
