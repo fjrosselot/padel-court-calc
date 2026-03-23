@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v3.8</span>
+    <span class="version-badge">v3.9</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -815,7 +815,7 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
     let remaining = totalPerCat.reduce((s, n) => s + n, 0);
 
     while (remaining > 0) {
-      let bestT = Infinity, bestC = -1, bestCat = -1, bestGrp = -1, bestMatchIdx = -1, bestEligible = Infinity, bestRatio = Infinity;
+      let bestT = Infinity, bestC = -1, bestCat = -1, bestGrp = -1, bestMatchIdx = -1, bestEligible = Infinity, bestRatio = Infinity, bestRound = -1;
 
       for (let ci = 0; ci < withDays.length; ci++) {
         const catRatio = scheduledPerCat[ci] / (totalPerCat[ci] || 1);
@@ -836,11 +836,12 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
             const eligibleFrom = Math.max(g.pairFreeAt[m.p1], g.pairFreeAt[m.p2], roundReady);
             for (let c = 0; c < totalCourts; c++) {
               const t = Math.max(courtFreeAt[c], eligibleFrom);
-              // Tie-breaking: 1) menor t  2) menor eligibleFrom (espera más)  3) menor % avance (equidad)
+              // Tie-breaking: 1) menor t  2) menor eligibleFrom (espera más)  3) menor % avance (equidad)  4) ronda más tardía (evita que últimas rondas queden sin cancha)
               const isBetter = t < bestT ||
                 (t === bestT && eligibleFrom < bestEligible) ||
-                (t === bestT && eligibleFrom === bestEligible && catRatio < bestRatio);
-              if (isBetter) { bestT = t; bestC = c; bestCat = ci; bestGrp = gi; bestMatchIdx = mi; bestEligible = eligibleFrom; bestRatio = catRatio; }
+                (t === bestT && eligibleFrom === bestEligible && catRatio < bestRatio - 1e-9) ||
+                (t === bestT && eligibleFrom === bestEligible && Math.abs(catRatio - bestRatio) < 1e-9 && m.round > bestRound);
+              if (isBetter) { bestT = t; bestC = c; bestCat = ci; bestGrp = gi; bestMatchIdx = mi; bestEligible = eligibleFrom; bestRatio = catRatio; bestRound = m.round; }
             }
           }
         }
