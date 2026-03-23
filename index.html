@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Campeonatos v3.3 — Pádel</title>
+<title>Simulador Campeonatos v3.4 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v3.3</span>
+    <span class="version-badge">v3.4</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -1168,10 +1168,23 @@ function recalcAll() {
 
     if (currentView === 'fixture') {
       const activeTotalCourts = withDays.reduce((s,r)=>s+(r.activeCourts||r.minCourts),0);
+      const _ppg = +document.getElementById('pairsPerGroup').value || 4;
+      const _apg = +document.getElementById('advancePerGroup').value || 2;
       lastFixtureData = {
         blocks: fixtureBlocks, totalCourts: activeTotalCourts,
         startMin, slotMin: matchMin + pauseMin, minsPerDay,
-        config: `${categories.length} cat · ${activeTotalCourts} canchas · ${fmt(startMin)}-${fmt(startMin+minsPerDay)} · ${matchMin}min+${pauseMin}min`
+        config: [
+          categories.map(c => `${c.name}(${c.pairs}p)`).join(', '),
+          `${activeTotalCourts} canchas`,
+          `${fmt(startMin)}-${fmt(startMin+minsPerDay)}`,
+          `${matchMin}min` + (pauseMin > 0 ? `+${pauseMin}min pausa` : ' sin pausa'),
+          opts.hasFaseGrupos ? `grupos(${_ppg}p/g avanzan ${_apg})` : 'sin grupos',
+          opts.hasFaseFinal ? 'playoffs' : 'sin playoffs',
+          opts.hasCopas ? 'oro+plata' : null,
+          opts.hasThirdPlace ? '3er lugar' : null,
+          opts.allowBye ? 'bye' : 'sin bye',
+          opts.greedySchedule ? 'FIXTURE COMPACTO' : 'por rondas',
+        ].filter(Boolean).join(' · ')
       };
       const overflowBlocks = fixtureBlocks.filter(b => b.startMin >= startMin + minsPerDay);
       const overflowHtml = overflowBlocks.length > 0
