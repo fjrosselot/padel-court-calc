@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v3.4</span>
+    <span class="version-badge">v3.5</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -793,7 +793,8 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
           if (g.currentRound >= roundsInGroups || g.matchesLeft <= 0) continue;
           for (let c = 0; c < totalCourts; c++) {
             const t = Math.max(courtFreeAt[c], g.roundReady);
-            if (t < bestT) { bestT = t; bestC = c; bestCat = ci; bestGrp = gi; }
+            const isBetter = t < bestT || (t === bestT && g.roundReady < gs[bestCat][bestGrp]?.roundReady);
+            if (isBetter) { bestT = t; bestC = c; bestCat = ci; bestGrp = gi; }
           }
         }
       }
