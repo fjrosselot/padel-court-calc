@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v3.5</span>
+    <span class="version-badge">v3.6</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -247,6 +247,9 @@
       </div>
       <div class="tog-pill" onclick="toggleOpt('greedySchedule')" data-tip="Cualquier partido puede usar cualquier cancha libre. Elimina gaps.">
         <div class="toggle" id="tog_greedySchedule"></div><span>Fixture compacto</span>
+      </div>
+      <div class="tog-pill" id="strictRoundsRow" onclick="toggleOpt('strictRounds')" data-tip="Espera que todos los partidos de una ronda terminen antes de iniciar la siguiente" style="display:none">
+        <div class="toggle" id="tog_strictRounds"></div><span>Esperar fin ronda</span>
       </div>
     </div>
     <div id="gruposOptions">
@@ -361,7 +364,7 @@
 const CAT_COLORS = ['#00e5a0','#ff6b35','#ffd166','#a78bfa','#60a5fa','#f472b6','#34d399','#fb923c'];
 let categories = [{ id:1, name:'Masculino A', pairs:8 }, { id:2, name:'Femenino B', pairs:6 }];
 let nextId = 3;
-let opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false, greedySchedule:false };
+let opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false, greedySchedule:false, strictRounds:false };
 let currentView = 'resumen';
 function switchView(v) {
   currentView = v;
@@ -419,6 +422,7 @@ function toggleOpt(key) {
   opts[key] = !opts[key];
   document.getElementById('tog_' + key).className = 'toggle' + (opts[key] ? ' on' : '');
   if (key === 'hasFaseGrupos') document.getElementById('gruposOptions').style.display = opts[key] ? 'block' : 'none';
+  if (key === 'greedySchedule') document.getElementById('strictRoundsRow').style.display = opts[key] ? 'flex' : 'none';
   // Copa Oro/Plata solo aplica cuando hay grupos Y fase final
   const canHaveCopas = opts.hasFaseGrupos && opts.hasFaseFinal;
   document.getElementById('copasToggleRow').style.display = canHaveCopas ? 'flex' : 'none';
@@ -760,6 +764,24 @@ function buildFixture(withDays, startMinBase, matchMin, pauseMin) {
   return blocks;
 }
 
+// Genera los emparejamientos round-robin para n parejas (algoritmo círculo)
+function generateRoundRobin(n) {
+  const matches = [];
+  const size = n % 2 === 0 ? n : n + 1; // añade bye virtual si n es impar
+  const fixed = size - 1;
+  const rot = Array.from({length: size - 1}, (_, i) => i);
+  for (let round = 0; round < size - 1; round++) {
+    const a = fixed, b = rot[0];
+    if (a < n && b < n) matches.push({round, p1: a, p2: b});
+    for (let k = 1; k < size / 2; k++) {
+      const x = rot[k], y = rot[size - 1 - k];
+      if (x < n && y < n) matches.push({round, p1: x, p2: y});
+    }
+    rot.unshift(rot.pop());
+  }
+  return matches;
+}
+
 // ── FIXTURE BUILDER GLOBAL (canchas compartidas entre categorías) ─────────────
 function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
   const slotMin = matchMin + pauseMin;
@@ -775,26 +797,43 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
   const roundsInGroups = ppg % 2 === 0 ? ppg - 1 : (opts.allowBye ? ppg : ppg - 1);
 
   // ── FASE DE GRUPOS: todos los grupos de todas las categorías comparten canchas ──
+  // Modelo por parejas: cada partido tiene p1 y p2 asignados (round-robin real)
   if (opts.hasFaseGrupos) {
-    // Estado por [catIdx][groupIdx]
-    const gs = withDays.map(r =>
-      Array.from({ length: r.groups }, () => ({
-        currentRound: 0, matchesLeft: courtsPerGroup,
-        roundReady: startMinBase, roundLastEnd: startMinBase
-      }))
-    );
-    let remaining = withDays.reduce((s, r) => s + (r.grupMatches || 0), 0);
+    const gs = withDays.map(r => {
+      const rem = r.effectivePairs % ppg;
+      return Array.from({length: r.groups}, (_, gi) => {
+        const pairsInGroup = (gi === r.groups - 1 && rem > 0) ? rem : ppg;
+        const matches = generateRoundRobin(pairsInGroup).map(m => ({...m, scheduled: false, endTime: 0}));
+        return { matches, pairFreeAt: Array(pairsInGroup).fill(startMinBase) };
+      });
+    });
+
+    let remaining = withDays.reduce((s, _r, ci) => s + gs[ci].reduce((s2, g) => s2 + g.matches.length, 0), 0);
 
     while (remaining > 0) {
-      let bestT = Infinity, bestC = -1, bestCat = -1, bestGrp = -1;
+      let bestT = Infinity, bestC = -1, bestCat = -1, bestGrp = -1, bestMatchIdx = -1, bestEligible = Infinity;
+
       for (let ci = 0; ci < withDays.length; ci++) {
         for (let gi = 0; gi < gs[ci].length; gi++) {
           const g = gs[ci][gi];
-          if (g.currentRound >= roundsInGroups || g.matchesLeft <= 0) continue;
-          for (let c = 0; c < totalCourts; c++) {
-            const t = Math.max(courtFreeAt[c], g.roundReady);
-            const isBetter = t < bestT || (t === bestT && g.roundReady < gs[bestCat][bestGrp]?.roundReady);
-            if (isBetter) { bestT = t; bestC = c; bestCat = ci; bestGrp = gi; }
+          for (let mi = 0; mi < g.matches.length; mi++) {
+            const m = g.matches[mi];
+            if (m.scheduled) continue;
+
+            // En modo estricto: ronda N solo puede empezar cuando ronda N-1 completó
+            let roundReady = startMinBase;
+            if (opts.strictRounds && m.round > 0) {
+              const prev = g.matches.filter(x => x.round === m.round - 1);
+              if (!prev.every(x => x.scheduled)) continue;
+              roundReady = Math.max(...prev.map(x => x.endTime));
+            }
+
+            const eligibleFrom = Math.max(g.pairFreeAt[m.p1], g.pairFreeAt[m.p2], roundReady);
+            for (let c = 0; c < totalCourts; c++) {
+              const t = Math.max(courtFreeAt[c], eligibleFrom);
+              const isBetter = t < bestT || (t === bestT && eligibleFrom < bestEligible);
+              if (isBetter) { bestT = t; bestC = c; bestCat = ci; bestGrp = gi; bestMatchIdx = mi; bestEligible = eligibleFrom; }
+            }
           }
         }
       }
@@ -802,28 +841,25 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
 
       const r = withDays[bestCat];
       const g = gs[bestCat][bestGrp];
+      const m = g.matches[bestMatchIdx];
+      const grpLetter = String.fromCharCode(65 + bestGrp);
+
       blocks.push({ id: nextId(), court: bestC, startMin: bestT, endMin: bestT + matchMin,
-        label: `Grp ${String.fromCharCode(65 + bestGrp)} R${g.currentRound + 1}`,
+        label: `${grpLetter} P${m.p1 + 1}vsP${m.p2 + 1}`,
         color: r.color, phase: 'GRUPOS', catName: r.cat.name });
 
+      m.scheduled = true;
+      m.endTime = bestT + slotMin;
+      g.pairFreeAt[m.p1] = bestT + slotMin;
+      g.pairFreeAt[m.p2] = bestT + slotMin;
       courtFreeAt[bestC] = bestT + slotMin;
-      g.matchesLeft--;
-      g.roundLastEnd = Math.max(g.roundLastEnd, bestT + slotMin);
       remaining--;
-
-      if (g.matchesLeft === 0) {
-        g.currentRound++;
-        if (g.currentRound < roundsInGroups) {
-          g.matchesLeft = courtsPerGroup;
-          g.roundReady = g.roundLastEnd;
-        }
-      }
     }
 
-    // Registrar cuándo termina la fase de grupos por categoría
-    withDays.forEach((r, ci) =>
-      r._groupEnd = Math.max(...gs[ci].map(g => g.roundLastEnd), startMinBase)
-    );
+    withDays.forEach((r, ci) => {
+      const ends = gs[ci].flatMap(g => g.matches.filter(m => m.scheduled).map(m => m.endTime));
+      r._groupEnd = ends.length ? Math.max(...ends) : startMinBase;
+    });
   } else {
     withDays.forEach(r => { r._groupEnd = startMinBase; });
   }
@@ -1184,7 +1220,7 @@ function recalcAll() {
           opts.hasCopas ? 'oro+plata' : null,
           opts.hasThirdPlace ? '3er lugar' : null,
           opts.allowBye ? 'bye' : 'sin bye',
-          opts.greedySchedule ? 'FIXTURE COMPACTO' : 'por rondas',
+          opts.greedySchedule ? ('FIXTURE COMPACTO' + (opts.strictRounds ? ' rondas estrictas' : ' rondas libres')) : 'por rondas',
         ].filter(Boolean).join(' · ')
       };
       const overflowBlocks = fixtureBlocks.filter(b => b.startMin >= startMin + minsPerDay);
@@ -1400,13 +1436,14 @@ function applyConfig(data) {
   document.getElementById('pairsPerGroup').value = data.pairsPerGroup;
   document.getElementById('advancePerGroup').value = data.advancePerGroup;
 
-  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas','hasThirdPlace','greedySchedule'].forEach(k => {
+  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas','hasThirdPlace','greedySchedule','strictRounds'].forEach(k => {
     document.getElementById('tog_' + k).className = 'toggle' + (opts[k] ? ' on' : '');
   });
   document.getElementById('gruposOptions').style.display = opts.hasFaseGrupos ? 'block' : 'none';
   const canHaveCopas = opts.hasFaseGrupos && opts.hasFaseFinal;
   document.getElementById('copasToggleRow').style.display = canHaveCopas ? 'flex' : 'none';
   document.getElementById('thirdPlaceToggleRow').style.display = opts.hasFaseFinal ? 'flex' : 'none';
+  document.getElementById('strictRoundsRow').style.display = opts.greedySchedule ? 'flex' : 'none';
   renderCats();
   recalcAll();
 }
@@ -1442,7 +1479,7 @@ function newSimulation() {
   currentSimName = null;
   categories = [{ id:1, name:'Masculino A', pairs:8 }, { id:2, name:'Femenino B', pairs:6 }];
   nextId = 3;
-  opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false, greedySchedule:false };
+  opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false, greedySchedule:false, strictRounds:false };
   document.getElementById('matchDuration').value = 30; document.getElementById('matchDurationVal').textContent = '30 min';
   document.getElementById('pauseDuration').value = 5;  document.getElementById('pauseDurationVal').textContent = '5 min';
   document.getElementById('startTime').value = 1080;   document.getElementById('startTimeVal').textContent = '18:00';
@@ -1451,12 +1488,13 @@ function newSimulation() {
   document.getElementById('maxCourts').value = 0;
   document.getElementById('pairsPerGroup').value = 4;
   document.getElementById('advancePerGroup').value = 2;
-  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas','hasThirdPlace','greedySchedule'].forEach(k => {
+  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas','hasThirdPlace','greedySchedule','strictRounds'].forEach(k => {
     document.getElementById('tog_' + k).className = 'toggle' + (opts[k] ? ' on' : '');
   });
   document.getElementById('gruposOptions').style.display = 'block';
   document.getElementById('copasToggleRow').style.display = 'flex';
   document.getElementById('thirdPlaceToggleRow').style.display = 'flex';
+  document.getElementById('strictRoundsRow').style.display = 'none';
   renderCats(); recalcAll(); renderSaveBtn(); loadSimList();
 }
 
