@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v4.0</span>
+    <span class="version-badge">v4.1</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -846,7 +846,9 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
         let bestT = Infinity, bestC = -1, bestCat = -1, bestGrp = -1, bestMatchIdx = -1, bestEligible = Infinity, bestRatio = Infinity, bestRound = -1;
 
         for (let ci = 0; ci < withDays.length; ci++) {
-          const catRatio = scheduledPerCat[ci] / (totalPerCat[ci] || 1);
+          // Jitter por (attempt, ci): rompe empates de catRatio de forma diferente en cada intento
+          const jitter = ((attempt * 7919 + ci * 31337) % 1000) * 1e-6;
+          const catRatio = scheduledPerCat[ci] / (totalPerCat[ci] || 1) + jitter;
           for (let gi = 0; gi < gs[ci].length; gi++) {
             const g = gs[ci][gi];
             for (let mi = 0; mi < g.matches.length; mi++) {
