@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Campeonatos v2.3 — Pádel</title>
+<title>Simulador Campeonatos v2.4 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -141,7 +141,7 @@
   <div class="logo-icon">🎾</div>
   <div style="display:flex;align-items:baseline;gap:10px">
     <h1>SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v2.3</span>
+    <span class="version-badge">v2.4</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -689,11 +689,22 @@ function recalcAll() {
   const base = categories.map(calcCategory);
   const totalCourtsIdeal = base.reduce((s, r) => s + r.minCourts, 0);
 
-  // Distribuir canchas disponibles proporcionalmente entre categorías (mínimo 1 por cat)
+  // Distribuir canchas disponibles proporcionalmente (método mayor resto, suma exacta = maxCourts)
   const courtsPerCat = base.map(r => {
     if (maxCourts === 0 || maxCourts >= totalCourtsIdeal) return r.minCourts;
-    return Math.max(1, Math.round(maxCourts * r.minCourts / totalCourtsIdeal));
+    return Math.max(1, Math.floor(maxCourts * r.minCourts / totalCourtsIdeal));
   });
+  if (maxCourts > 0 && maxCourts < totalCourtsIdeal) {
+    let assigned = courtsPerCat.reduce((a, b) => a + b, 0);
+    const remainders = base.map((r, i) => ({
+      i, rem: (maxCourts * r.minCourts / totalCourtsIdeal) - courtsPerCat[i]
+    })).sort((a, b) => b.rem - a.rem);
+    let ri = 0;
+    while (assigned < maxCourts && ri < remainders.length) {
+      courtsPerCat[remainders[ri++].i]++;
+      assigned++;
+    }
+  }
 
   const withDays = base.map((r, i) => ({
     ...r,
