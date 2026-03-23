@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v4.1</span>
+    <span class="version-badge">v4.2</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -1175,9 +1175,16 @@ function recalcAll() {
   const totalMatches = base.reduce((s, r) => s + r.totalMatches, 0);
 
   // Duration per day across categories
-  const durByDay = Array.from({ length: numDays }, (_, d) =>
-    Math.max(...withDays.map(r => r.days[d]?.minutes || 0))
-  );
+  // En modo Fixture Compacto las canchas son globales → duración real = ceil(totalPartidos/totalCanchas)*slot
+  const durByDay = Array.from({ length: numDays }, (_, d) => {
+    if (opts.greedySchedule) {
+      const totalM = withDays.reduce((s, r) => s + (r.days[d]?.matches || 0), 0);
+      const totalC = withDays.reduce((s, r) => s + (r.activeCourts || r.minCourts), 0);
+      const slotM = base[0]?.slotMin || 20;
+      return totalC > 0 ? Math.ceil(totalM / totalC) * slotM : 0;
+    }
+    return Math.max(...withDays.map(r => r.days[d]?.minutes || 0));
+  });
   const maxDayDur = Math.max(...durByDay);
   const longestDayIdx = durByDay.indexOf(maxDayDur);
 
