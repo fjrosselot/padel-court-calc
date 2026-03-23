@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Campeonatos v2.6 — Pádel</title>
+<title>Simulador Campeonatos v2.7 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -23,40 +23,58 @@
   .version-badge { font-size: 10px; background: rgba(0,229,160,0.12); color: var(--accent); border: 1px solid rgba(0,229,160,0.3); border-radius: 4px; padding: 2px 7px; font-family: 'DM Sans', sans-serif; font-weight: 600; letter-spacing: 0; align-self: flex-end; margin-bottom: 3px; }
   .header-sub { font-size: 11px; color: var(--muted); margin-left: auto; text-align: right; line-height: 1.5; }
 
-  input[type="range"] { width: 100%; -webkit-appearance: none; appearance: none; height: 4px; background: var(--border); border-radius: 2px; outline: none; border: none; padding: 0; cursor: pointer; }
-  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: var(--accent); border-radius: 50%; cursor: pointer; border: none; }
-  input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; background: var(--accent); border-radius: 50%; cursor: pointer; border: none; }
+  input[type="range"] { width: 100%; -webkit-appearance: none; appearance: none; height: 3px; background: var(--border); border-radius: 2px; outline: none; border: none; padding: 0; cursor: pointer; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: var(--accent); border-radius: 50%; cursor: pointer; border: none; }
+  input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; background: var(--accent); border-radius: 50%; cursor: pointer; border: none; }
   input[type="range"]:focus { border-color: transparent; box-shadow: none; }
-  .slider-row { display: flex; align-items: center; gap: 10px; }
-  .slider-val { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--accent); min-width: 32px; text-align: right; flex-shrink: 0; }
-  .slider-unit { font-size: 11px; color: var(--muted); flex-shrink: 0; }
 
-  .container { display: grid; grid-template-columns: 400px 1fr; min-height: calc(100vh - 66px); }
-  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 20px; overflow-y: auto; max-height: calc(100vh - 66px); position: sticky; top: 66px; }
+  /* Slider compacto con +/- */
+  .slider-field { margin-bottom: 8px; }
+  .slider-hdr { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+  .slider-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; }
+  .slider-val2 { font-family: 'Bebas Neue', sans-serif; font-size: 16px; color: var(--accent); }
+  .slider-ctrl { display: flex; align-items: center; gap: 6px; }
+
+  /* Botón step +/- */
+  .step-btn { width: 22px; height: 22px; background: var(--bg); border: 1px solid var(--border); color: var(--muted); border-radius: 5px; cursor: pointer; font-size: 15px; display: grid; place-items: center; flex-shrink: 0; transition: all 0.15s; line-height: 1; padding: 0; font-family: monospace; }
+  .step-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Toggle pills en grid */
+  .tog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 6px; }
+  .tog-pill { display: flex; align-items: center; gap: 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px; cursor: pointer; font-size: 11px; transition: border-color 0.15s; user-select: none; }
+  .tog-pill:hover { border-color: rgba(0,229,160,0.4); }
+  .tog-pill .toggle { width: 28px; height: 15px; border-radius: 8px; flex-shrink: 0; }
+  .tog-pill .toggle::after { width: 10px; height: 10px; top: 2.5px; left: 2.5px; }
+  .tog-pill .toggle.on::after { transform: translateX(13px); }
+
+  /* Stepper numérico */
+  .stepper-wrap { display: flex; flex-direction: column; gap: 3px; }
+  .stepper-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; }
+  .stepper { display: flex; align-items: center; gap: 5px; }
+  .stepper input[type="number"] { text-align: center; padding: 5px 2px; min-width: 0; flex: 1; }
+
+  .container { display: grid; grid-template-columns: 360px 1fr; min-height: calc(100vh - 66px); }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 16px; overflow-y: auto; max-height: calc(100vh - 66px); position: sticky; top: 66px; }
   .main { padding: 20px; }
 
-  .section { margin-bottom: 20px; }
-  .section-title { font-family: 'Bebas Neue', sans-serif; font-size: 14px; letter-spacing: 2px; color: var(--accent); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .section { margin-bottom: 16px; }
+  .section-title { font-family: 'Bebas Neue', sans-serif; font-size: 13px; letter-spacing: 2px; color: var(--accent); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
   .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
   .field { margin-bottom: 9px; }
   label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
-  input[type="number"], input[type="time"] { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 11px; border-radius: 7px; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; transition: border-color 0.2s; }
+  input[type="number"], input[type="time"] { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; border-radius: 7px; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; transition: border-color 0.2s; }
   input:focus { border-color: var(--accent); }
 
-  .toggle-row { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border: 1px solid var(--border); padding: 9px 12px; border-radius: 7px; margin-bottom: 7px; cursor: pointer; transition: border-color 0.2s; }
-  .toggle-row:hover { border-color: var(--accent); }
-  .toggle-row span { font-size: 13px; }
   .toggle { width: 34px; height: 18px; background: var(--border); border-radius: 9px; position: relative; transition: background 0.2s; flex-shrink: 0; }
   .toggle.on { background: var(--accent); }
   .toggle::after { content: ''; position: absolute; width: 12px; height: 12px; background: white; border-radius: 50%; top: 3px; left: 3px; transition: transform 0.2s; }
   .toggle.on::after { transform: translateX(16px); }
 
-  .cat-list { display: flex; flex-direction: column; gap: 7px; }
-  .cat-item { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
-  .cat-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .cat-color { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-  .cat-remove { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 4px; transition: color 0.2s; }
+  .cat-list { display: flex; flex-direction: column; gap: 5px; }
+  .cat-item { background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 6px 10px; display: flex; align-items: center; gap: 7px; }
+  .cat-color { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .cat-remove { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0 2px; transition: color 0.2s; line-height: 1; flex-shrink: 0; }
   .cat-remove:hover { color: var(--danger); }
 
   .add-cat-btn { width: 100%; background: transparent; border: 1px dashed var(--border); color: var(--muted); padding: 9px; border-radius: 7px; cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 13px; transition: all 0.2s; margin-top: 7px; }
@@ -141,7 +159,7 @@
   <div class="logo-icon">🎾</div>
   <div style="display:flex;align-items:baseline;gap:10px">
     <h1>SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v2.6</span>
+    <span class="version-badge">v2.7</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -172,83 +190,122 @@
 
   <div class="section">
     <div class="section-title">Formato</div>
-    <div class="toggle-row" onclick="toggleOpt('hasFaseGrupos')">
-      <span data-tip="Todas las parejas del grupo se enfrentan entre sí">Fase de grupos (Round Robin)</span>
-      <div class="toggle on" id="tog_hasFaseGrupos"></div>
-    </div>
-    <div id="gruposOptions">
-      <div class="g2" style="margin-bottom:8px">
-        <div class="field"><label>Parejas por grupo</label><input type="number" id="pairsPerGroup" value="4" min="3" max="8" onchange="recalcAll()"></div>
-        <div class="field"><label>Avanzan por grupo</label><input type="number" id="advancePerGroup" value="2" min="1" max="4" onchange="recalcAll()"></div>
+    <div class="tog-grid">
+      <div class="tog-pill" onclick="toggleOpt('hasFaseGrupos')" data-tip="Todas las parejas del grupo se enfrentan entre sí">
+        <div class="toggle on" id="tog_hasFaseGrupos"></div><span>Grupos (RR)</span>
+      </div>
+      <div class="tog-pill" onclick="toggleOpt('hasFaseFinal')" data-tip="Cuadro eliminatorio tras fase de grupos">
+        <div class="toggle on" id="tog_hasFaseFinal"></div><span>Playoffs</span>
+      </div>
+      <div class="tog-pill" id="copasToggleRow" onclick="toggleOpt('hasCopas')" data-tip="Los no clasificados juegan su propio bracket de consolación" style="display:none">
+        <div class="toggle" id="tog_hasCopas"></div><span>🥇 Oro / 🥈 Plata</span>
+      </div>
+      <div class="tog-pill" id="thirdPlaceToggleRow" onclick="toggleOpt('hasThirdPlace')" data-tip="Los perdedores de semis disputan el 3er puesto" style="display:none">
+        <div class="toggle" id="tog_hasThirdPlace"></div><span>🥉 3er lugar</span>
+      </div>
+      <div class="tog-pill" onclick="toggleOpt('allowBye')" data-tip="Pareja sin rival en una ronda (nº impar de parejas)">
+        <div class="toggle on" id="tog_allowBye"></div><span>Pareja libre (bye)</span>
+      </div>
+      <div class="tog-pill" onclick="toggleOpt('greedySchedule')" data-tip="Cualquier partido puede usar cualquier cancha libre. Elimina gaps.">
+        <div class="toggle" id="tog_greedySchedule"></div><span>Fixture compacto</span>
       </div>
     </div>
-    <div class="toggle-row" onclick="toggleOpt('hasFaseFinal')">
-      <span data-tip="Cuadro eliminatorio tras fase de grupos">Fase final (playoffs)</span>
-      <div class="toggle on" id="tog_hasFaseFinal"></div>
-    </div>
-    <div class="toggle-row" id="copasToggleRow" onclick="toggleOpt('hasCopas')" style="display:flex">
-      <span data-tip="Los no clasificados juegan su propio bracket de consolación (Copa de Plata)">🥇 Copa de Oro / 🥈 Plata</span>
-      <div class="toggle" id="tog_hasCopas"></div>
-    </div>
-    <div class="toggle-row" id="thirdPlaceToggleRow" onclick="toggleOpt('hasThirdPlace')" style="display:flex">
-      <span data-tip="Los perdedores de las semifinales disputan el 3er puesto">🥉 Partido por 3er lugar</span>
-      <div class="toggle" id="tog_hasThirdPlace"></div>
-    </div>
-    <div class="toggle-row" onclick="toggleOpt('allowBye')">
-      <span data-tip="Pareja sin rival en una ronda (nº impar de parejas)">Permitir pareja libre (bye)</span>
-      <div class="toggle on" id="tog_allowBye"></div>
-    </div>
-    <div style="height:1px;background:var(--border);margin:8px 0"></div>
-    <div class="toggle-row" onclick="toggleOpt('greedySchedule')">
-      <span data-tip="Canchas compartidas entre categorías: cualquier partido puede usar cualquier cancha libre. Elimina gaps y reduce el tiempo total.">Canchas compartidas (fixture compacto)</span>
-      <div class="toggle" id="tog_greedySchedule"></div>
+    <div id="gruposOptions">
+      <div class="g2" style="margin-top:4px">
+        <div class="stepper-wrap">
+          <div class="stepper-lbl">Parejas / grupo</div>
+          <div class="stepper">
+            <button class="step-btn" onclick="stepInput('pairsPerGroup',-1)">−</button>
+            <input type="number" id="pairsPerGroup" value="4" min="3" max="8" onchange="recalcAll()">
+            <button class="step-btn" onclick="stepInput('pairsPerGroup',1)">+</button>
+          </div>
+        </div>
+        <div class="stepper-wrap">
+          <div class="stepper-lbl">Avanzan</div>
+          <div class="stepper">
+            <button class="step-btn" onclick="stepInput('advancePerGroup',-1)">−</button>
+            <input type="number" id="advancePerGroup" value="2" min="1" max="4" onchange="recalcAll()">
+            <button class="step-btn" onclick="stepInput('advancePerGroup',1)">+</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
   <div class="section">
     <div class="section-title">Tiempos</div>
-    <div class="field">
-      <label>Duración partido</label>
-      <div class="slider-row">
-        <input type="range" id="matchDuration" value="30" min="20" max="35" step="5" oninput="document.getElementById('matchDurationVal').textContent=this.value; recalcAll()">
-        <span class="slider-val" id="matchDurationVal">30</span>
-        <span class="slider-unit">min</span>
+    <div class="slider-field">
+      <div class="slider-hdr">
+        <span class="slider-lbl">Duración partido</span>
+        <span class="slider-val2" id="matchDurationVal">30 min</span>
+      </div>
+      <div class="slider-ctrl">
+        <button class="step-btn" onclick="stepSlider('matchDuration',-1)">−</button>
+        <input type="range" id="matchDuration" value="30" min="20" max="35" step="5"
+          oninput="document.getElementById('matchDurationVal').textContent=this.value+' min'; recalcAll()">
+        <button class="step-btn" onclick="stepSlider('matchDuration',1)">+</button>
       </div>
     </div>
-    <div class="field">
-      <label>Pausa entre partidos</label>
-      <div class="slider-row">
-        <input type="range" id="pauseDuration" value="5" min="0" max="15" step="5" oninput="document.getElementById('pauseDurationVal').textContent=this.value; recalcAll()">
-        <span class="slider-val" id="pauseDurationVal">5</span>
-        <span class="slider-unit">min</span>
+    <div class="slider-field">
+      <div class="slider-hdr">
+        <span class="slider-lbl">Pausa entre partidos</span>
+        <span class="slider-val2" id="pauseDurationVal">5 min</span>
+      </div>
+      <div class="slider-ctrl">
+        <button class="step-btn" onclick="stepSlider('pauseDuration',-1)">−</button>
+        <input type="range" id="pauseDuration" value="5" min="0" max="15" step="5"
+          oninput="document.getElementById('pauseDurationVal').textContent=this.value+' min'; recalcAll()">
+        <button class="step-btn" onclick="stepSlider('pauseDuration',1)">+</button>
       </div>
     </div>
-    <div class="field">
-      <label>Hora de inicio</label>
-      <div class="slider-row">
+    <div class="slider-field">
+      <div class="slider-hdr">
+        <span class="slider-lbl">Hora de inicio</span>
+        <span class="slider-val2" id="startTimeVal">18:00</span>
+      </div>
+      <div class="slider-ctrl">
+        <button class="step-btn" onclick="stepSlider('startTime',-1)">−</button>
         <input type="range" id="startTime" value="1080" min="1080" max="1200" step="30"
           oninput="const m=+this.value; document.getElementById('startTimeVal').textContent=String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); recalcAll()">
-        <span class="slider-val" id="startTimeVal" style="font-size:16px;min-width:46px">18:00</span>
+        <button class="step-btn" onclick="stepSlider('startTime',1)">+</button>
       </div>
     </div>
-    <div class="field">
-      <label>Horas disponibles por día</label>
-      <div class="slider-row">
+    <div class="slider-field">
+      <div class="slider-hdr">
+        <span class="slider-lbl">Horas disponibles / día</span>
+        <span class="slider-val2" id="hoursPerDayVal">2h</span>
+      </div>
+      <div class="slider-ctrl">
+        <button class="step-btn" onclick="stepSlider('hoursPerDay',-1)">−</button>
         <input type="range" id="hoursPerDay" value="2" min="1" max="4" step="0.5"
           oninput="const h=+this.value; document.getElementById('hoursPerDayVal').textContent=Math.floor(h)+'h'+(h%1?'30':''); recalcAll()">
-        <span class="slider-val" id="hoursPerDayVal" style="font-size:16px;min-width:46px">2h</span>
+        <button class="step-btn" onclick="stepSlider('hoursPerDay',1)">+</button>
       </div>
     </div>
   </div>
 
   <div class="section">
     <div class="section-title">Jornadas y canchas</div>
-    <div class="g2">
-      <div class="field"><label data-tip="¿En cuántos días se disputa el torneo?">Días del torneo</label><input type="number" id="numDays" value="1" min="1" max="7" onchange="recalcAll()"></div>
-      <div class="field"><label data-tip="¿Cuántas canchas tienes disponibles? 0 = calcula el mínimo necesario automáticamente">Canchas disponibles</label><input type="number" id="maxCourts" value="0" min="0" max="30" onchange="recalcAll()"></div>
+    <div class="g2" style="margin-bottom:6px">
+      <div class="stepper-wrap">
+        <div class="stepper-lbl" data-tip="¿En cuántos días se disputa el torneo?">Días del torneo</div>
+        <div class="stepper">
+          <button class="step-btn" onclick="stepInput('numDays',-1)">−</button>
+          <input type="number" id="numDays" value="1" min="1" max="7" onchange="recalcAll()">
+          <button class="step-btn" onclick="stepInput('numDays',1)">+</button>
+        </div>
+      </div>
+      <div class="stepper-wrap">
+        <div class="stepper-lbl" data-tip="0 = calcula el mínimo necesario automáticamente">Canchas disponibles</div>
+        <div class="stepper">
+          <button class="step-btn" onclick="stepInput('maxCourts',-1)">−</button>
+          <input type="number" id="maxCourts" value="0" min="0" max="30" onchange="recalcAll()">
+          <button class="step-btn" onclick="stepInput('maxCourts',1)">+</button>
+        </div>
+      </div>
     </div>
-    <div id="courtsBadge" style="margin-top:6px;font-size:12px;padding:7px 11px;border-radius:6px;display:none;line-height:1.5"></div>
-    <div id="dayLogicInfo" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px"></div>
+    <div id="courtsBadge" style="font-size:12px;padding:7px 11px;border-radius:6px;display:none;line-height:1.5"></div>
+    <div id="dayLogicInfo" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 11px;font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px"></div>
   </div>
 
 </aside>
@@ -278,23 +335,39 @@ function renderCats() {
     const d = document.createElement('div');
     d.className = 'cat-item';
     d.innerHTML = `
-      <div class="cat-header">
-        <div class="cat-color" style="background:${color}"></div>
-        <input type="text" value="${cat.name}" style="background:transparent;border:none;color:var(--text);font-weight:600;font-size:13px;outline:none;flex:1;"
-          onchange="updateCat(${cat.id},'name',this.value)">
-        <button class="cat-remove" onclick="removeCategory(${cat.id})">×</button>
+      <div class="cat-color" style="background:${color}"></div>
+      <input type="text" value="${cat.name}" style="background:transparent;border:none;color:var(--text);font-weight:600;font-size:12px;outline:none;flex:1;min-width:0;"
+        onchange="updateCat(${cat.id},'name',this.value)">
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+        <button class="step-btn" onclick="stepCatPairs(${cat.id},-1)">−</button>
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:17px;color:var(--accent);min-width:20px;text-align:center">${cat.pairs}</span>
+        <button class="step-btn" onclick="stepCatPairs(${cat.id},1)">+</button>
+        <span style="font-size:10px;color:var(--muted)">par</span>
       </div>
-      <div class="g2">
-        <div class="field" style="margin:0"><label style="font-size:10px">Nº de parejas</label>
-          <input type="number" value="${cat.pairs}" min="2" max="64" onchange="updateCat(${cat.id},'pairs',parseInt(this.value))">
-        </div>
-      </div>`;
+      <button class="cat-remove" onclick="removeCategory(${cat.id})">×</button>`;
     list.appendChild(d);
   });
 }
 function addCategory() { categories.push({ id: nextId++, name: `Categoría ${nextId-1}`, pairs: 4 }); renderCats(); recalcAll(); }
 function removeCategory(id) { if (categories.length <= 1) return; categories = categories.filter(c => c.id !== id); renderCats(); recalcAll(); }
 function updateCat(id, f, v) { const c = categories.find(c => c.id === id); if (c) { c[f] = v; recalcAll(); } }
+function stepCatPairs(id, dir) {
+  const cat = categories.find(c => c.id === id);
+  if (!cat) return;
+  cat.pairs = Math.max(2, Math.min(64, cat.pairs + dir));
+  renderCats(); recalcAll();
+}
+function stepSlider(id, dir) {
+  const el = document.getElementById(id);
+  const step = parseFloat(el.step);
+  el.value = Math.max(parseFloat(el.min), Math.min(parseFloat(el.max), parseFloat(el.value) + dir * step));
+  el.dispatchEvent(new Event('input'));
+}
+function stepInput(id, dir) {
+  const el = document.getElementById(id);
+  el.value = Math.max(+el.min, Math.min(+el.max, +el.value + dir));
+  el.dispatchEvent(new Event('change'));
+}
 function toggleOpt(key) {
   opts[key] = !opts[key];
   document.getElementById('tog_' + key).className = 'toggle' + (opts[key] ? ' on' : '');
@@ -1207,8 +1280,8 @@ function applyConfig(data) {
     document.getElementById(id).value = val;
     document.getElementById(valId).textContent = displayFn ? displayFn(val) : val;
   };
-  setSlider('matchDuration', 'matchDurationVal', data.matchDuration);
-  setSlider('pauseDuration', 'pauseDurationVal', data.pauseDuration);
+  setSlider('matchDuration', 'matchDurationVal', data.matchDuration, v => `${v} min`);
+  setSlider('pauseDuration', 'pauseDurationVal', data.pauseDuration, v => `${v} min`);
   setSlider('startTime', 'startTimeVal', data.startTime, fmtTime);
   setSlider('hoursPerDay', 'hoursPerDayVal', data.hoursPerDay, fmtHours);
   document.getElementById('numDays').value = data.numDays;
@@ -1259,8 +1332,8 @@ function newSimulation() {
   categories = [{ id:1, name:'Masculino A', pairs:8 }, { id:2, name:'Femenino B', pairs:6 }];
   nextId = 3;
   opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false, greedySchedule:false };
-  document.getElementById('matchDuration').value = 30; document.getElementById('matchDurationVal').textContent = 30;
-  document.getElementById('pauseDuration').value = 5;  document.getElementById('pauseDurationVal').textContent = 5;
+  document.getElementById('matchDuration').value = 30; document.getElementById('matchDurationVal').textContent = '30 min';
+  document.getElementById('pauseDuration').value = 5;  document.getElementById('pauseDurationVal').textContent = '5 min';
   document.getElementById('startTime').value = 1080;   document.getElementById('startTimeVal').textContent = '18:00';
   document.getElementById('hoursPerDay').value = 2;    document.getElementById('hoursPerDayVal').textContent = '2h';
   document.getElementById('numDays').value = 1;
