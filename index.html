@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Campeonatos v2.1 — Pádel</title>
+<title>Simulador Campeonatos v2.2 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -141,7 +141,7 @@
   <div class="logo-icon">🎾</div>
   <div style="display:flex;align-items:baseline;gap:10px">
     <h1>SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v2.1</span>
+    <span class="version-badge">v2.2</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -449,41 +449,59 @@ function buildFixture(withDays, startMinBase, matchMin, pauseMin) {
     const catStart = courtOffset;
     let t = startMinBase;
     const courtsPerGroup = Math.floor(ppg / 2);
+    const activeCourts = r.activeCourts || r.minCourts;
 
     if (opts.hasFaseGrupos && r.grupMatches > 0) {
       const groupSize = ppg;
       const roundsInGroups = groupSize % 2 === 0 ? groupSize - 1 : (opts.allowBye ? groupSize : groupSize - 1);
+      const matchesPerRound = r.groups * courtsPerGroup;
       for (let rnd = 0; rnd < roundsInGroups; rnd++) {
+        // Serializar partidos de la ronda si hay menos canchas que partidos simultáneos ideales
+        let matchIdx = 0;
         for (let g = 0; g < r.groups; g++) {
-          const courtsThisGroup = Math.min(courtsPerGroup, r.minCourts - g * courtsPerGroup);
-          for (let m = 0; m < courtsThisGroup; m++) {
+          for (let m = 0; m < courtsPerGroup; m++) {
+            const slot = Math.floor(matchIdx / activeCourts);
+            const court = catStart + (matchIdx % activeCourts);
             blocks.push({
               id: nextId(),
-              court: catStart + g * courtsPerGroup + m,
-              startMin: t, endMin: t + matchMin,
+              court: court,
+              startMin: t + slot * slotMin,
+              endMin: t + slot * slotMin + matchMin,
               label: `Grp ${String.fromCharCode(65+g)} R${rnd+1}`,
               color: r.color, phase: 'GRUPOS', catName: r.cat.name
             });
+            matchIdx++;
           }
         }
-        t += slotMin;
+        t += Math.ceil(matchesPerRound / activeCourts) * slotMin;
       }
     } else if (!opts.hasFaseGrupos && !opts.hasFaseFinal) {
       // Pure round robin
       const n = r.effectivePairs;
       const rounds = n % 2 === 0 ? n - 1 : (opts.allowBye ? n : n - 1);
+      const matchesPerRound = Math.floor(n / 2);
       for (let rnd = 0; rnd < rounds; rnd++) {
-        for (let m = 0; m < Math.floor(n / 2); m++) {
-          blocks.push({ id: nextId(), court: catStart + m, startMin: t, endMin: t + matchMin,
+        for (let m = 0; m < matchesPerRound; m++) {
+          const slot = Math.floor(m / activeCourts);
+          const court = catStart + (m % activeCourts);
+          blocks.push({ id: nextId(), court, startMin: t + slot * slotMin, endMin: t + slot * slotMin + matchMin,
             label: `R${rnd+1}`, color: r.color, phase: 'RR', catName: r.cat.name });
         }
-        t += slotMin;
+        t += Math.ceil(matchesPerRound / activeCourts) * slotMin;
       }
     }
 
     if (opts.hasFaseFinal && r.adv >= 2) {
+      // Distribuir canchas activas entre Oro y Plata proporcionalmente
+      const activeFinalCourts = r.silverCourts > 0
+        ? Math.max(1, Math.round(activeCourts * r.courtsFinal / r.minCourts))
+        : Math.min(activeCourts, r.courtsFinal);
+      const activeSilverCourts = r.silverCourts > 0
+        ? Math.max(0, activeCourts - activeFinalCourts)
+        : 0;
+
       const goldCourtStart = catStart;
-      const silverCourtStart = catStart + r.courtsFinal;
+      const silverCourtStart = catStart + activeFinalCourts;
       let goldT = t, silverT = t;
 
       // Copa de Oro
@@ -495,37 +513,48 @@ function buildFixture(withDays, startMinBase, matchMin, pauseMin) {
         if (isFinal) finalRoundT = goldT;
         const rname = isFinal ? '🥇 Final' : matches === 2 ? '🥇 Semis' : `🥇 R${pr+1}`;
         for (let m = 0; m < matches; m++) {
-          blocks.push({ id: nextId(), court: goldCourtStart + m, startMin: goldT, endMin: goldT + matchMin,
+          const slot = Math.floor(m / activeFinalCourts);
+          const court = goldCourtStart + (m % activeFinalCourts);
+          blocks.push({ id: nextId(), court, startMin: goldT + slot * slotMin, endMin: goldT + slot * slotMin + matchMin,
             label: rname, color: r.color, phase: 'PLAYOFFS', catName: r.cat.name });
         }
-        goldT += slotMin; matches = Math.floor(matches / 2); pr++;
+        goldT += Math.ceil(matches / activeFinalCourts) * slotMin;
+        matches = Math.floor(matches / 2); pr++;
       }
-      // 3er lugar: paralelo con la final, en la cancha +1 (libre en la ronda final)
+      // 3er lugar: paralelo con la final
       if (opts.hasThirdPlace && r.adv >= 4) {
-        blocks.push({ id: nextId(), court: goldCourtStart + 1, startMin: finalRoundT, endMin: finalRoundT + matchMin,
+        const thirdCourt = activeFinalCourts > 1 ? goldCourtStart + 1 : goldCourtStart;
+        blocks.push({ id: nextId(), court: thirdCourt, startMin: finalRoundT, endMin: finalRoundT + matchMin,
           label: '🥉 3° Lugar', color: r.color, phase: '3RD', catName: r.cat.name });
       }
 
-      // Copa de Plata (si está habilitada)
+      // Copa de Plata
       if (opts.hasCopas && r.silverMatches > 0) {
         const apg = +document.getElementById('advancePerGroup').value || 2;
         const silverTeams = r.groups * Math.max(0, ppg - apg);
         let sSize = 1; while (sSize < silverTeams) sSize *= 2;
         let sMatches = sSize / 2, sp = 0;
+        // Si no hay canchas separadas para Plata, juega después de Oro en las mismas canchas
+        const silverStart = activeSilverCourts > 0 ? silverCourtStart : goldCourtStart;
+        const silverCourtCount = activeSilverCourts > 0 ? activeSilverCourts : activeFinalCourts;
+        if (activeSilverCourts === 0) silverT = goldT;
         while (sMatches >= 1) {
           const rname = sMatches === 1 ? '🥈 Final' : sMatches === 2 ? '🥈 Semis' : `🥈 R${sp+1}`;
           for (let m = 0; m < sMatches; m++) {
-            blocks.push({ id: nextId(), court: silverCourtStart + m, startMin: silverT, endMin: silverT + matchMin,
+            const slot = Math.floor(m / silverCourtCount);
+            const court = silverStart + (m % silverCourtCount);
+            blocks.push({ id: nextId(), court, startMin: silverT + slot * slotMin, endMin: silverT + slot * slotMin + matchMin,
               label: rname, color: r.color, phase: 'PLATA', catName: r.cat.name });
           }
-          silverT += slotMin; sMatches = Math.floor(sMatches / 2); sp++;
+          silverT += Math.ceil(sMatches / silverCourtCount) * slotMin;
+          sMatches = Math.floor(sMatches / 2); sp++;
         }
       }
 
       t = Math.max(goldT, silverT);
     }
 
-    courtOffset += r.minCourts;
+    courtOffset += activeCourts;
   }
   return blocks;
 }
@@ -768,9 +797,9 @@ function recalcAll() {
       main.innerHTML = tabBar + warningsHtml + `
         <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:11px;display:flex;align-items:center;gap:8px;">
           SIMULADOR DE FIXTURE <div style="flex:1;height:1px;background:var(--border)"></div>
-          <span style="font-size:11px;color:var(--muted);font-family:'DM Sans',sans-serif;letter-spacing:0;font-weight:400">${fmt(startMin)} → ${fmt(endDisplay)} · ${totalCourtsIdeal} canchas</span>
+          <span style="font-size:11px;color:var(--muted);font-family:'DM Sans',sans-serif;letter-spacing:0;font-weight:400">${fmt(startMin)} → ${fmt(endDisplay)} · ${withDays.reduce((s,r)=>s+(r.activeCourts||r.minCourts),0)} canchas${maxCourts > 0 && maxCourts < totalCourtsIdeal ? ` <span style="color:#ffbe00">(limitado a ${maxCourts})</span>` : ''}</span>
         </div>
-        ${renderFixtureCalendar(fixtureBlocks, totalCourtsIdeal, startMin, endDisplay, withDays)}`;
+        ${renderFixtureCalendar(fixtureBlocks, withDays.reduce((s,r)=>s+(r.activeCourts||r.minCourts),0), startMin, endDisplay, withDays)}`;
     } else {
       main.innerHTML = tabBar + warningsHtml + `
         <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:11px;display:flex;align-items:center;gap:8px;">
