@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v3.7</span>
+    <span class="version-badge">v3.8</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -808,12 +808,17 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
       });
     });
 
-    let remaining = withDays.reduce((s, _r, ci) => s + gs[ci].reduce((s2, g) => s2 + g.matches.length, 0), 0);
+    // Contadores de equidad: % de partidos programados por categoría
+    const totalPerCat = gs.map(groups => groups.reduce((s, g) => s + g.matches.length, 0));
+    const scheduledPerCat = new Array(withDays.length).fill(0);
+
+    let remaining = totalPerCat.reduce((s, n) => s + n, 0);
 
     while (remaining > 0) {
-      let bestT = Infinity, bestC = -1, bestCat = -1, bestGrp = -1, bestMatchIdx = -1, bestEligible = Infinity;
+      let bestT = Infinity, bestC = -1, bestCat = -1, bestGrp = -1, bestMatchIdx = -1, bestEligible = Infinity, bestRatio = Infinity;
 
       for (let ci = 0; ci < withDays.length; ci++) {
+        const catRatio = scheduledPerCat[ci] / (totalPerCat[ci] || 1);
         for (let gi = 0; gi < gs[ci].length; gi++) {
           const g = gs[ci][gi];
           for (let mi = 0; mi < g.matches.length; mi++) {
@@ -831,8 +836,11 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
             const eligibleFrom = Math.max(g.pairFreeAt[m.p1], g.pairFreeAt[m.p2], roundReady);
             for (let c = 0; c < totalCourts; c++) {
               const t = Math.max(courtFreeAt[c], eligibleFrom);
-              const isBetter = t < bestT || (t === bestT && eligibleFrom < bestEligible);
-              if (isBetter) { bestT = t; bestC = c; bestCat = ci; bestGrp = gi; bestMatchIdx = mi; bestEligible = eligibleFrom; }
+              // Tie-breaking: 1) menor t  2) menor eligibleFrom (espera más)  3) menor % avance (equidad)
+              const isBetter = t < bestT ||
+                (t === bestT && eligibleFrom < bestEligible) ||
+                (t === bestT && eligibleFrom === bestEligible && catRatio < bestRatio);
+              if (isBetter) { bestT = t; bestC = c; bestCat = ci; bestGrp = gi; bestMatchIdx = mi; bestEligible = eligibleFrom; bestRatio = catRatio; }
             }
           }
         }
@@ -853,6 +861,7 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
       g.pairFreeAt[m.p1] = bestT + slotMin;
       g.pairFreeAt[m.p2] = bestT + slotMin;
       courtFreeAt[bestC] = bestT + slotMin;
+      scheduledPerCat[bestCat]++;
       remaining--;
     }
 
