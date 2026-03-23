@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Campeonatos v3.2 — Pádel</title>
+<title>Simulador Campeonatos v3.3 — Pádel</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v3.2</span>
+    <span class="version-badge">v3.3</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -559,6 +559,50 @@ const fmt = (totalMin) => {
   const m = totalMin % 60;
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
 };
+
+let lastFixtureData = null;
+
+function copyFixtureText() {
+  if (!lastFixtureData) return;
+  const { blocks, totalCourts, startMin, slotMin, minsPerDay, config } = lastFixtureData;
+  const endMin = startMin + minsPerDay;
+  const slots = Math.ceil(minsPerDay / slotMin);
+  const inBounds = blocks.filter(b => b.startMin < endMin);
+  const totalSlots = totalCourts * slots;
+  const eff = Math.round(inBounds.length / totalSlots * 100);
+  const empty = totalSlots - inBounds.length;
+
+  const lines = [];
+  lines.push(`FIXTURE · ${config}`);
+  lines.push(`Partidos: ${inBounds.length} | Huecos: ${empty} | Eficiencia: ${eff}% | Slot: ${slotMin}min`);
+  lines.push('');
+
+  for (let c = 0; c < totalCourts; c++) {
+    const courtBlocks = blocks.filter(b => b.court === c);
+    let row = `C${String(c+1).padStart(2,'0')}:`;
+    for (let s = 0; s < slots; s++) {
+      const t = startMin + s * slotMin;
+      const b = courtBlocks.find(b => b.startMin === t);
+      row += b ? ` [${fmt(t)} ${b.label}·${b.catName}]` : ` [${fmt(t)} ···]`;
+    }
+    lines.push(row);
+  }
+
+  const overflowBlocks = blocks.filter(b => b.startMin >= endMin);
+  if (overflowBlocks.length) {
+    lines.push('');
+    lines.push(`FUERA DE HORARIO (${overflowBlocks.length} partidos):`);
+    overflowBlocks.forEach(b => lines.push(`  ${fmt(b.startMin)} C${b.court+1} ${b.label}·${b.catName}`));
+  }
+
+  const text = lines.join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyFixtureBtn');
+    if (btn) { btn.textContent = '✅ Copiado!'; setTimeout(() => btn.textContent = '📋 Copiar', 1800); }
+  }).catch(() => {
+    prompt('Copia el fixture:', text);
+  });
+}
 const dur = (min) => `${Math.floor(min/60)}h${min%60>0?(min%60)+'m':''}`;
 
 // ── FIXTURE BUILDER ──────────────────────────────────────────────────────────
@@ -1124,6 +1168,11 @@ function recalcAll() {
 
     if (currentView === 'fixture') {
       const activeTotalCourts = withDays.reduce((s,r)=>s+(r.activeCourts||r.minCourts),0);
+      lastFixtureData = {
+        blocks: fixtureBlocks, totalCourts: activeTotalCourts,
+        startMin, slotMin: matchMin + pauseMin, minsPerDay,
+        config: `${categories.length} cat · ${activeTotalCourts} canchas · ${fmt(startMin)}-${fmt(startMin+minsPerDay)} · ${matchMin}min+${pauseMin}min`
+      };
       const overflowBlocks = fixtureBlocks.filter(b => b.startMin >= startMin + minsPerDay);
       const overflowHtml = overflowBlocks.length > 0
         ? `<div style="margin-bottom:10px;padding:8px 12px;background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.3);border-radius:7px;font-size:12px;color:var(--danger)">
@@ -1131,9 +1180,10 @@ function recalcAll() {
             Agrega más horas al día, más días, o más canchas.
           </div>` : '';
       main.innerHTML = tabBar + warningsHtml + `
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:11px;display:flex;align-items:center;gap:8px;">
-          SIMULADOR DE FIXTURE <div style="flex:1;height:1px;background:var(--border)"></div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--accent);margin-bottom:11px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          SIMULADOR DE FIXTURE <div style="flex:1;height:1px;background:var(--border);min-width:10px"></div>
           <span style="font-size:11px;color:var(--muted);font-family:'DM Sans',sans-serif;letter-spacing:0;font-weight:400">${fmt(startMin)} → ${fmt(endDisplay)} · ${activeTotalCourts} canchas${maxCourts > 0 && maxCourts < totalCourtsIdeal ? ` <span style="color:#ffbe00">(limitado a ${maxCourts})</span>` : ''}</span>
+          <button id="copyFixtureBtn" onclick="copyFixtureText()" style="background:var(--bg);border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:5px;font-family:'DM Sans',sans-serif;font-size:11px;cursor:pointer;flex-shrink:0">📋 Copiar</button>
         </div>
         ${overflowHtml}
         ${renderFixtureCalendar(fixtureBlocks, activeTotalCourts, startMin, endDisplay, withDays)}`;
