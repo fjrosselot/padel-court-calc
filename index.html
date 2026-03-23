@@ -1007,7 +1007,7 @@ function renderFixtureCalendar(blocks, totalCourts, startMinBase, endMinDisplay,
       blockHtml += `
         <div class="fixture-block" style="left:${x}px;width:${w - 2}px;height:32px;background:${b.color};opacity:${opacity}"
           title="${b.catName} · ${b.phase} · ${fmt(b.startMin)}–${fmt(b.endMin)}">
-          ${w > 65 ? `<span style="font-size:8px;color:#0006;font-weight:600;line-height:1">${b.id}</span><span style="font-size:9px;font-weight:700;color:#000;white-space:nowrap;overflow:hidden;max-width:100%;text-align:center;line-height:1.2">${b.label}</span>` : w > 28 ? `<span style="font-size:9px;font-weight:700;color:#000">${b.id}</span>` : ''}
+          ${w > 55 ? `<span style="font-size:8px;color:#0006;font-weight:600;line-height:1">${b.id}</span><span style="font-size:9px;font-weight:700;color:#000;white-space:nowrap;overflow:hidden;max-width:100%;text-align:center;line-height:1.2">${b.label}</span>` : w > 28 ? `<span style="font-size:9px;font-weight:700;color:#000;white-space:nowrap;overflow:hidden">${b.label}</span>` : ''}
         </div>`;
     }
 
