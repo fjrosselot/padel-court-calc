@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v3.9</span>
+    <span class="version-badge">v4.0</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -782,6 +782,17 @@ function generateRoundRobin(n) {
   return matches;
 }
 
+// Shuffle determinista con semilla (LCG) — para intentos alternativos del scheduler
+function seededShuffle(arr, seed) {
+  let s = (seed * 1664525 + 1013904223) >>> 0;
+  const a = arr.map(m => ({...m, scheduled: false, endTime: 0}));
+  for (let i = a.length - 1; i > 0; i--) {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    [a[i], a[s % (i + 1)]] = [a[s % (i + 1)], a[i]];
+  }
+  return a;
+}
+
 // ── FIXTURE BUILDER GLOBAL (canchas compartidas entre categorías) ─────────────
 function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
   const slotMin = matchMin + pauseMin;
@@ -797,79 +808,107 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
   const roundsInGroups = ppg % 2 === 0 ? ppg - 1 : (opts.allowBye ? ppg : ppg - 1);
 
   // ── FASE DE GRUPOS: todos los grupos de todas las categorías comparten canchas ──
-  // Modelo por parejas: cada partido tiene p1 y p2 asignados (round-robin real)
+  // Multi-intento: ejecuta el greedy hasta 8 veces con ordenamientos distintos y conserva el mejor
   if (opts.hasFaseGrupos) {
-    const gs = withDays.map(r => {
+    // Estructura base (sin estado de scheduling)
+    const baseGroups = withDays.map(r => {
       const rem = r.effectivePairs % ppg;
       return Array.from({length: r.groups}, (_, gi) => {
         const pairsInGroup = (gi === r.groups - 1 && rem > 0) ? rem : ppg;
-        const matches = generateRoundRobin(pairsInGroup).map(m => ({...m, scheduled: false, endTime: 0}));
-        return { matches, pairFreeAt: Array(pairsInGroup).fill(startMinBase) };
+        const baseMatches = generateRoundRobin(pairsInGroup);
+        return { baseMatches, pairsInGroup };
       });
     });
 
-    // Contadores de equidad: % de partidos programados por categoría
-    const totalPerCat = gs.map(groups => groups.reduce((s, g) => s + g.matches.length, 0));
-    const scheduledPerCat = new Array(withDays.length).fill(0);
+    const totalPerCat = baseGroups.map(catGroups => catGroups.reduce((s, g) => s + g.baseMatches.length, 0));
+    const totalGroupMatches = totalPerCat.reduce((s, n) => s + n, 0);
+    const minsPerDayLocal = (+document.getElementById('hoursPerDay').value || 2) * 60;
+    const endMinLocal = startMinBase + minsPerDayLocal;
 
-    let remaining = totalPerCat.reduce((s, n) => s + n, 0);
+    let bestBlocks = null, bestInWindow = -1, bestCourtFreeAt = null, bestGroupEnds = null;
 
-    while (remaining > 0) {
-      let bestT = Infinity, bestC = -1, bestCat = -1, bestGrp = -1, bestMatchIdx = -1, bestEligible = Infinity, bestRatio = Infinity, bestRound = -1;
+    const MAX_ATTEMPTS = opts.greedySchedule ? 32 : 8;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS && bestInWindow < totalGroupMatches; attempt++) {
+      // Estado fresco para este intento
+      const cfa = Array(totalCourts).fill(startMinBase);
+      const gs = baseGroups.map((catGroups, ci) => catGroups.map((g, gi) => ({
+        matches: attempt === 0
+          ? g.baseMatches.map(m => ({...m, scheduled: false, endTime: 0}))
+          : seededShuffle(g.baseMatches, attempt * 9973 + ci * 97 + gi * 7),
+        pairFreeAt: Array(g.pairsInGroup).fill(startMinBase)
+      })));
 
-      for (let ci = 0; ci < withDays.length; ci++) {
-        const catRatio = scheduledPerCat[ci] / (totalPerCat[ci] || 1);
-        for (let gi = 0; gi < gs[ci].length; gi++) {
-          const g = gs[ci][gi];
-          for (let mi = 0; mi < g.matches.length; mi++) {
-            const m = g.matches[mi];
-            if (m.scheduled) continue;
+      const scheduledPerCat = new Array(withDays.length).fill(0);
+      let remaining = totalGroupMatches;
+      const attemptBlocks = [];
 
-            // En modo estricto: ronda N solo puede empezar cuando ronda N-1 completó
-            let roundReady = startMinBase;
-            if (opts.strictRounds && m.round > 0) {
-              const prev = g.matches.filter(x => x.round === m.round - 1);
-              if (!prev.every(x => x.scheduled)) continue;
-              roundReady = Math.max(...prev.map(x => x.endTime));
-            }
+      while (remaining > 0) {
+        let bestT = Infinity, bestC = -1, bestCat = -1, bestGrp = -1, bestMatchIdx = -1, bestEligible = Infinity, bestRatio = Infinity, bestRound = -1;
 
-            const eligibleFrom = Math.max(g.pairFreeAt[m.p1], g.pairFreeAt[m.p2], roundReady);
-            for (let c = 0; c < totalCourts; c++) {
-              const t = Math.max(courtFreeAt[c], eligibleFrom);
-              // Tie-breaking: 1) menor t  2) menor eligibleFrom (espera más)  3) menor % avance (equidad)  4) ronda más tardía (evita que últimas rondas queden sin cancha)
-              const isBetter = t < bestT ||
-                (t === bestT && eligibleFrom < bestEligible) ||
-                (t === bestT && eligibleFrom === bestEligible && catRatio < bestRatio - 1e-9) ||
-                (t === bestT && eligibleFrom === bestEligible && Math.abs(catRatio - bestRatio) < 1e-9 && m.round > bestRound);
-              if (isBetter) { bestT = t; bestC = c; bestCat = ci; bestGrp = gi; bestMatchIdx = mi; bestEligible = eligibleFrom; bestRatio = catRatio; bestRound = m.round; }
+        for (let ci = 0; ci < withDays.length; ci++) {
+          const catRatio = scheduledPerCat[ci] / (totalPerCat[ci] || 1);
+          for (let gi = 0; gi < gs[ci].length; gi++) {
+            const g = gs[ci][gi];
+            for (let mi = 0; mi < g.matches.length; mi++) {
+              const m = g.matches[mi];
+              if (m.scheduled) continue;
+
+              let roundReady = startMinBase;
+              if (opts.strictRounds && m.round > 0) {
+                const prev = g.matches.filter(x => x.round === m.round - 1);
+                if (!prev.every(x => x.scheduled)) continue;
+                roundReady = Math.max(...prev.map(x => x.endTime));
+              }
+
+              const eligibleFrom = Math.max(g.pairFreeAt[m.p1], g.pairFreeAt[m.p2], roundReady);
+              for (let c = 0; c < totalCourts; c++) {
+                const t = Math.max(cfa[c], eligibleFrom);
+                const isBetter = t < bestT ||
+                  (t === bestT && eligibleFrom < bestEligible) ||
+                  (t === bestT && eligibleFrom === bestEligible && catRatio < bestRatio - 1e-9) ||
+                  (t === bestT && eligibleFrom === bestEligible && Math.abs(catRatio - bestRatio) < 1e-9 && m.round > bestRound);
+                if (isBetter) { bestT = t; bestC = c; bestCat = ci; bestGrp = gi; bestMatchIdx = mi; bestEligible = eligibleFrom; bestRatio = catRatio; bestRound = m.round; }
+              }
             }
           }
         }
+        if (bestC === -1) break;
+
+        const r = withDays[bestCat];
+        const g = gs[bestCat][bestGrp];
+        const m = g.matches[bestMatchIdx];
+        const grpLetter = String.fromCharCode(65 + bestGrp);
+
+        attemptBlocks.push({ court: bestC, startMin: bestT, endMin: bestT + matchMin,
+          label: `${grpLetter} P${m.p1 + 1}vsP${m.p2 + 1}`,
+          color: r.color, phase: 'GRUPOS', catName: r.cat.name });
+
+        m.scheduled = true;
+        m.endTime = bestT + slotMin;
+        g.pairFreeAt[m.p1] = bestT + slotMin;
+        g.pairFreeAt[m.p2] = bestT + slotMin;
+        cfa[bestC] = bestT + slotMin;
+        scheduledPerCat[bestCat]++;
+        remaining--;
       }
-      if (bestC === -1) break;
 
-      const r = withDays[bestCat];
-      const g = gs[bestCat][bestGrp];
-      const m = g.matches[bestMatchIdx];
-      const grpLetter = String.fromCharCode(65 + bestGrp);
-
-      blocks.push({ id: nextId(), court: bestC, startMin: bestT, endMin: bestT + matchMin,
-        label: `${grpLetter} P${m.p1 + 1}vsP${m.p2 + 1}`,
-        color: r.color, phase: 'GRUPOS', catName: r.cat.name });
-
-      m.scheduled = true;
-      m.endTime = bestT + slotMin;
-      g.pairFreeAt[m.p1] = bestT + slotMin;
-      g.pairFreeAt[m.p2] = bestT + slotMin;
-      courtFreeAt[bestC] = bestT + slotMin;
-      scheduledPerCat[bestCat]++;
-      remaining--;
+      // Evaluar: contar partidos que terminan dentro de la ventana de tiempo
+      const inWindow = attemptBlocks.filter(b => b.endMin <= endMinLocal).length;
+      if (inWindow > bestInWindow) {
+        bestInWindow = inWindow;
+        bestBlocks = attemptBlocks;
+        bestCourtFreeAt = cfa.slice();
+        bestGroupEnds = withDays.map((_, ci) => {
+          const ends = gs[ci].flatMap(g => g.matches.filter(m => m.scheduled).map(m => m.endTime));
+          return ends.length ? Math.max(...ends) : startMinBase;
+        });
+      }
     }
 
-    withDays.forEach((r, ci) => {
-      const ends = gs[ci].flatMap(g => g.matches.filter(m => m.scheduled).map(m => m.endTime));
-      r._groupEnd = ends.length ? Math.max(...ends) : startMinBase;
-    });
+    // Aplicar el mejor intento
+    bestBlocks.forEach(b => blocks.push({ id: nextId(), ...b }));
+    for (let c = 0; c < totalCourts; c++) courtFreeAt[c] = bestCourtFreeAt[c];
+    withDays.forEach((r, ci) => { r._groupEnd = bestGroupEnds[ci]; });
   } else {
     withDays.forEach(r => { r._groupEnd = startMinBase; });
   }
