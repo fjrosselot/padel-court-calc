@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v4.3</span>
+    <span class="version-badge">v4.4</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -1082,7 +1082,18 @@ function renderFixtureCalendar(blocks, totalCourts, startMinBase, endMinDisplay,
         <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)">
           <div style="width:10px;height:10px;border-radius:2px;background:${color}"></div>${name}
         </div>`).join('')}
-      <div style="margin-left:auto;font-size:10px;color:var(--muted)">Grupos 72% · 🥇 Oro 100% · 🥉 3° 85% · 🥈 Plata 55%</div>
+      ${(() => {
+        const phases = new Set(blocks.map(b => b.phase));
+        const labels = [];
+        if (phases.has('GRUPOS')) labels.push('Grupos');
+        if (phases.has('PLAYOFFS')) labels.push('🥇 Copa Oro');
+        if (phases.has('3RD')) labels.push('🥉 3° lugar');
+        if (phases.has('PLATA')) labels.push('🥈 Copa Plata');
+        if (phases.has('RR')) labels.push('Round Robin');
+        return labels.length > 1
+          ? `<div style="margin-left:auto;font-size:10px;color:var(--muted)">${labels.join(' · ')}</div>`
+          : '';
+      })()}
     </div>`;
 
   return `<div class="fixture-grid">${axisHtml}${rowsHtml}${legendHtml}</div>`;
