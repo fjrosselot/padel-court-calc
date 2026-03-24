@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v4.9</span>
+    <span class="version-badge">v5.0</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -1426,6 +1426,80 @@ function recalcAll() {
         ${renderDayTimeline(withDays, d, startMin, dayDur, minsPerDay)}
       </div>`;
     }).join('')}
+
+    ${(() => {
+      const ppgV = +document.getElementById('pairsPerGroup').value || 4;
+      const apgV = +document.getElementById('advancePerGroup').value || 2;
+
+      const rows = base.map(r => {
+        const rem = r.effectivePairs % ppgV;
+        const minGrp = (rem > 0 ? rem : ppgV) - 1;
+        const maxGrp = ppgV - 1;
+
+        let goldRounds = 0;
+        if (opts.hasFaseFinal && r.adv >= 2) {
+          let sz = 1; while (sz < r.adv) sz *= 2;
+          goldRounds = Math.round(Math.log2(sz));
+        }
+        const silverTeams = (opts.hasCopas && opts.hasFaseGrupos && opts.hasFaseFinal)
+          ? r.groups * Math.max(0, ppgV - apgV) : 0;
+        let silverRounds = 0;
+        if (silverTeams >= 2) {
+          let ss = 1; while (ss < silverTeams) ss *= 2;
+          silverRounds = Math.round(Math.log2(ss));
+        }
+
+        const minPlayoff = opts.hasFaseFinal ? (opts.hasCopas && silverTeams >= 2 ? 1 : 0) : 0;
+        const maxPlayoff = opts.hasFaseFinal ? goldRounds : 0;
+        return {
+          name: r.cat.name, color: CAT_COLORS[base.indexOf(r) % CAT_COLORS.length],
+          minGrp, maxGrp, minPlayoff, maxPlayoff,
+          min: minGrp + minPlayoff, max: maxGrp + maxPlayoff,
+          goldRounds, silverRounds, silverTeams
+        };
+      });
+
+      const allSame = rows.every(r => r.min === rows[0].min && r.max === rows[0].max);
+      const pathLines = (r) => {
+        const parts = [];
+        if (opts.hasFaseGrupos) parts.push(`<span style="color:var(--muted)">Grupos:</span> ${r.maxGrp} partido${r.maxGrp!==1?'s':''}`
+          + (r.minGrp < r.maxGrp ? ` <span style="color:var(--muted);font-size:10px">(mín ${r.minGrp} si grupo incompleto)</span>` : ''));
+        if (opts.hasFaseFinal && r.goldRounds > 0) {
+          const roundNames = ['Final','Semis+Final','QF+SF+F','R16+…'];
+          parts.push(`<span style="color:var(--muted)">Copa Oro:</span> +${r.goldRounds} <span style="color:var(--muted);font-size:10px">(${roundNames[r.goldRounds-1]||r.goldRounds+' rondas'})</span>`);
+        }
+        if (opts.hasCopas && r.silverTeams >= 2)
+          parts.push(`<span style="color:var(--muted)">Copa Plata:</span> +1 a +${r.silverRounds} partido${r.silverRounds!==1?'s':''}`);
+        if (opts.hasThirdPlace && r.goldRounds >= 2)
+          parts.push(`<span style="color:var(--muted)">3° lugar:</span> +1 (semi-perdedores)</span>`);
+        return parts.join('&ensp;·&ensp;');
+      };
+
+      return `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--muted);margin-bottom:11px">PARTIDOS POR PAREJA</div>
+        ${allSame ? `
+          <div style="display:flex;gap:16px;align-items:flex-end;margin-bottom:10px">
+            <div style="text-align:center">
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:38px;line-height:1;color:var(--accent)">${rows[0].min}</div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Mínimo garantizado</div>
+            </div>
+            <div style="font-size:22px;color:var(--border);padding-bottom:12px">—</div>
+            <div style="text-align:center">
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:38px;line-height:1;color:var(--accent)">${rows[0].max}</div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Máximo posible</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text);line-height:1.8">${pathLines(rows[0])}</div>
+        ` : rows.map(r => `
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px">
+            <div style="width:8px;height:8px;border-radius:50%;background:${r.color};flex-shrink:0"></div>
+            <div style="min-width:120px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--accent)">${r.min}–${r.max}</div>
+            <div style="font-size:11px;color:var(--muted)">${pathLines(r)}</div>
+          </div>`).join('')}
+      </div>`;
+    })()}
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:1px;color:var(--muted);margin-bottom:9px">RESUMEN OPERATIVO</div>
