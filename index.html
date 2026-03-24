@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v4.7</span>
+    <span class="version-badge">v4.8</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -241,6 +241,9 @@
       </div>
       <div class="tog-pill" id="thirdPlaceToggleRow" onclick="toggleOpt('hasThirdPlace')" data-tip="Los perdedores de semis disputan el 3er puesto" style="display:none">
         <div class="toggle" id="tog_hasThirdPlace"></div><span>🥉 3er lugar</span>
+      </div>
+      <div class="tog-pill" id="thirdPlaceLastRow" onclick="toggleOpt('thirdPlaceLast')" data-tip="El 3° lugar se juega después de todas las finales (última ronda)" style="display:none">
+        <div class="toggle" id="tog_thirdPlaceLast"></div><span>🥉 3° tras finales</span>
       </div>
       <div class="tog-pill" onclick="toggleOpt('allowBye')" data-tip="Pareja sin rival en una ronda (nº impar de parejas)">
         <div class="toggle on" id="tog_allowBye"></div><span>Pareja libre (bye)</span>
@@ -364,7 +367,7 @@
 const CAT_COLORS = ['#00e5a0','#ff6b35','#ffd166','#a78bfa','#60a5fa','#f472b6','#34d399','#fb923c'];
 let categories = [{ id:1, name:'Masculino A', pairs:8 }, { id:2, name:'Femenino B', pairs:6 }];
 let nextId = 3;
-let opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false, greedySchedule:false, strictRounds:false };
+let opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false, thirdPlaceLast:false, greedySchedule:false, strictRounds:false };
 let currentView = 'resumen';
 function switchView(v) {
   currentView = v;
@@ -429,6 +432,8 @@ function toggleOpt(key) {
   if (!canHaveCopas) { opts.hasCopas = false; document.getElementById('tog_hasCopas').className = 'toggle'; }
   document.getElementById('thirdPlaceToggleRow').style.display = opts.hasFaseFinal ? 'flex' : 'none';
   if (!opts.hasFaseFinal) { opts.hasThirdPlace = false; document.getElementById('tog_hasThirdPlace').className = 'toggle'; }
+  document.getElementById('thirdPlaceLastRow').style.display = (opts.hasThirdPlace && opts.hasFaseFinal) ? 'flex' : 'none';
+  if (!opts.hasThirdPlace) { opts.thirdPlaceLast = false; document.getElementById('tog_thirdPlaceLast').className = 'toggle'; }
   recalcAll();
 }
 
@@ -1000,18 +1005,27 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
       }
     }
 
-    // Partido por 3er lugar: paralelo a la final de cada categoría
-    for (const q of queues) {
-      if (q.type === 'GOLD' && opts.hasThirdPlace && q.r.adv >= 4 && q.lastFinalStart !== null) {
-        let bestC = -1, bestT = Infinity;
-        for (let c = 0; c < totalCourts; c++) {
-          const t = Math.max(courtFreeAt[c], q.lastFinalStart);
-          if (t < bestT) { bestT = t; bestC = c; }
-        }
-        if (bestC !== -1) {
-          blocks.push({ id: nextId(), court: bestC, startMin: bestT, endMin: bestT + matchMin,
-            label: '🥉 3° Lugar', color: q.r.color, phase: '3RD', catName: q.r.cat.name });
-          courtFreeAt[bestC] = bestT + slotMin;
+    // Partido por 3er lugar
+    if (opts.hasThirdPlace) {
+      // thirdPlaceLast: todos los 3° lugar después de que terminen TODAS las finales
+      const allFinalsEnd = opts.thirdPlaceLast
+        ? blocks.filter(b => b.phase === 'PLAYOFFS' || b.phase === 'PLATA')
+            .reduce((mx, b) => Math.max(mx, b.endMin + pauseMin), startMinBase)
+        : null;
+
+      for (const q of queues) {
+        if (q.type === 'GOLD' && q.r.adv >= 4 && q.lastFinalStart !== null) {
+          const earliestStart = opts.thirdPlaceLast ? allFinalsEnd : q.lastFinalStart;
+          let bestC = -1, bestT = Infinity;
+          for (let c = 0; c < totalCourts; c++) {
+            const t = Math.max(courtFreeAt[c], earliestStart);
+            if (t < bestT) { bestT = t; bestC = c; }
+          }
+          if (bestC !== -1) {
+            blocks.push({ id: nextId(), court: bestC, startMin: bestT, endMin: bestT + matchMin,
+              label: '🥉 3° Lugar', color: q.r.color, phase: '3RD', catName: q.r.cat.name });
+            courtFreeAt[bestC] = bestT + slotMin;
+          }
         }
       }
     }
@@ -1529,13 +1543,14 @@ function applyConfig(data) {
   document.getElementById('pairsPerGroup').value = data.pairsPerGroup;
   document.getElementById('advancePerGroup').value = data.advancePerGroup;
 
-  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas','hasThirdPlace','greedySchedule','strictRounds'].forEach(k => {
+  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas','hasThirdPlace','thirdPlaceLast','greedySchedule','strictRounds'].forEach(k => {
     document.getElementById('tog_' + k).className = 'toggle' + (opts[k] ? ' on' : '');
   });
   document.getElementById('gruposOptions').style.display = opts.hasFaseGrupos ? 'block' : 'none';
   const canHaveCopas = opts.hasFaseGrupos && opts.hasFaseFinal;
   document.getElementById('copasToggleRow').style.display = canHaveCopas ? 'flex' : 'none';
   document.getElementById('thirdPlaceToggleRow').style.display = opts.hasFaseFinal ? 'flex' : 'none';
+  document.getElementById('thirdPlaceLastRow').style.display = (opts.hasThirdPlace && opts.hasFaseFinal) ? 'flex' : 'none';
   document.getElementById('strictRoundsRow').style.display = opts.greedySchedule ? 'flex' : 'none';
   renderCats();
   recalcAll();
@@ -1572,7 +1587,7 @@ function newSimulation() {
   currentSimName = null;
   categories = [{ id:1, name:'Masculino A', pairs:8 }, { id:2, name:'Femenino B', pairs:6 }];
   nextId = 3;
-  opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false, greedySchedule:false, strictRounds:false };
+  opts = { hasFaseGrupos:true, hasFaseFinal:true, allowBye:true, hasCopas:false, hasThirdPlace:false, thirdPlaceLast:false, greedySchedule:false, strictRounds:false };
   document.getElementById('matchDuration').value = 30; document.getElementById('matchDurationVal').textContent = '30 min';
   document.getElementById('pauseDuration').value = 5;  document.getElementById('pauseDurationVal').textContent = '5 min';
   document.getElementById('startTime').value = 1080;   document.getElementById('startTimeVal').textContent = '18:00';
@@ -1581,12 +1596,13 @@ function newSimulation() {
   document.getElementById('maxCourts').value = 0;
   document.getElementById('pairsPerGroup').value = 4;
   document.getElementById('advancePerGroup').value = 2;
-  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas','hasThirdPlace','greedySchedule','strictRounds'].forEach(k => {
+  ['hasFaseGrupos','hasFaseFinal','allowBye','hasCopas','hasThirdPlace','thirdPlaceLast','greedySchedule','strictRounds'].forEach(k => {
     document.getElementById('tog_' + k).className = 'toggle' + (opts[k] ? ' on' : '');
   });
   document.getElementById('gruposOptions').style.display = 'block';
   document.getElementById('copasToggleRow').style.display = 'flex';
   document.getElementById('thirdPlaceToggleRow').style.display = 'flex';
+  document.getElementById('thirdPlaceLastRow').style.display = opts.hasThirdPlace ? 'flex' : 'none';
   document.getElementById('strictRoundsRow').style.display = 'none';
   renderCats(); recalcAll(); renderSaveBtn(); loadSimList();
 }
