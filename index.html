@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v4.8</span>
+    <span class="version-badge">v4.9</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -242,8 +242,8 @@
       <div class="tog-pill" id="thirdPlaceToggleRow" onclick="toggleOpt('hasThirdPlace')" data-tip="Los perdedores de semis disputan el 3er puesto" style="display:none">
         <div class="toggle" id="tog_hasThirdPlace"></div><span>🥉 3er lugar</span>
       </div>
-      <div class="tog-pill" id="thirdPlaceLastRow" onclick="toggleOpt('thirdPlaceLast')" data-tip="El 3° lugar se juega después de todas las finales (última ronda)" style="display:none">
-        <div class="toggle" id="tog_thirdPlaceLast"></div><span>🥉 3° tras finales</span>
+      <div class="tog-pill" id="thirdPlaceLastRow" onclick="toggleOpt('thirdPlaceLast')" data-tip="El 3° lugar se juega en ronda separada, después de todas las finales Oro" style="display:none">
+        <div class="toggle" id="tog_thirdPlaceLast"></div><span>🥉 3° lugar al final</span>
       </div>
       <div class="tog-pill" onclick="toggleOpt('allowBye')" data-tip="Pareja sin rival en una ronda (nº impar de parejas)">
         <div class="toggle on" id="tog_allowBye"></div><span>Pareja libre (bye)</span>
@@ -970,7 +970,10 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
         if (q.type === 'SILVER') eligibleFrom = Math.max(eligibleFrom, globalSemisEnd);
         for (let c = 0; c < totalCourts; c++) {
           const t = Math.max(courtFreeAt[c], eligibleFrom);
-          if (t < bestT) { bestT = t; bestC = c; bestQ = qi; }
+          // Plata tiene prioridad sobre Oro cuando empatan en tiempo:
+          // si hay pocas canchas, Plata va primero y Oro queda como última ronda (el climax)
+          const silverBeatsGold = t === bestT && q.type === 'SILVER' && bestQ >= 0 && queues[bestQ].type === 'GOLD';
+          if (t < bestT || silverBeatsGold) { bestT = t; bestC = c; bestQ = qi; }
         }
       }
       if (bestC === -1) break;
