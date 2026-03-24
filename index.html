@@ -192,7 +192,7 @@
   <div class="logo-icon">🎾</div>
   <div class="header-title">
     <h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">SIMULADOR <span>CAMPEONATOS</span></h1>
-    <span class="version-badge">v4.6</span>
+    <span class="version-badge">v4.7</span>
   </div>
   <div class="header-sub">Torneos americanos de pádel<br>planificación & fixture</div>
 </header>
@@ -927,7 +927,8 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
 
       queues.push({ r, type: 'GOLD', rounds: goldRounds, pr: 0,
         currentRound: 0, matchesLeft: goldRounds[0],
-        roundReady: r._groupEnd, roundLastEnd: r._groupEnd, lastFinalStart: null });
+        roundReady: r._groupEnd, roundLastEnd: r._groupEnd, lastFinalStart: null,
+        semisEnd: goldRounds.length === 1 ? r._groupEnd : null });
 
       if (opts.hasCopas && r.silverMatches > 0) {
         const silverTeams = r.groups * Math.max(0, ppg - apg);
@@ -945,9 +946,10 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
       // Sincronización global de rondas de playoffs:
       // Los gold finals y plata finals esperan a que TODOS los gold completen sus semis primero
       const goldQueues = queues.filter(q2 => q2.type === 'GOLD');
-      const allGoldPastSemis = goldQueues.every(q2 => q2.currentRound > 0 || q2.rounds.length === 1);
+      const allGoldPastSemis = goldQueues.every(q2 => q2.semisEnd !== null);
+      // semisEnd se congela cuando cada gold avanza de ronda 0 → no se contamina con tiempos de finales
       const globalSemisEnd = (allGoldPastSemis && goldQueues.length)
-        ? Math.max(...goldQueues.map(q2 => q2.roundLastEnd))
+        ? Math.max(...goldQueues.map(q2 => q2.semisEnd))
         : Infinity;
 
       let bestT = Infinity, bestC = -1, bestQ = -1;
@@ -988,6 +990,8 @@ function buildFixtureGlobal(withDays, startMinBase, matchMin, pauseMin) {
 
       if (q.matchesLeft === 0) {
         q.pr++;
+        // Congelar tiempo de fin de semis antes de avanzar (no se contamina con finales)
+        if (q.type === 'GOLD' && q.currentRound === 0 && q.rounds.length > 1) q.semisEnd = q.roundLastEnd;
         q.currentRound++;
         if (q.currentRound < q.rounds.length) {
           q.matchesLeft = q.rounds[q.currentRound];
